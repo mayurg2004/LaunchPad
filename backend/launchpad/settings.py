@@ -176,3 +176,6 @@ REST_FRAMEWORK = {
 
 # CORS Configuration
 CORS_ALLOW_ALL_ORIGINS = True # Allow all origins for development
+
+# Custom User Model
+AUTH_USER_MODEL = 'accounts.User'
