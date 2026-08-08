@@ -62,3 +62,30 @@ class PlacementDriveAPITest(TestCase):
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(PlacementDrive.objects.count(), 0)
+
+    def test_search_drives(self):
+        # Create a second drive to verify search
+        PlacementDrive.objects.create(
+            company=self.company,
+            title="Data Scientist Hiring",
+            job_role="Data Scientist",
+            package_lpa=15.0,
+            status="UPCOMING"
+        )
+        
+        # Search by title
+        response = self.client.get(f"{self.url}?search=Software")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['title'], "Software Engineer Hiring")
+        
+        # Search by job role
+        response = self.client.get(f"{self.url}?search=Scientist")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['title'], "Data Scientist Hiring")
+        
+        # Search by company name
+        response = self.client.get(f"{self.url}?search=Test Company")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
