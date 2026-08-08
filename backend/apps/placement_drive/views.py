@@ -7,8 +7,9 @@ class PlacementDriveViewSet(viewsets.ModelViewSet):
     queryset = PlacementDrive.objects.all().order_by('-created_at')
     serializer_class = PlacementDriveSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'job_role', 'company__company_name']
+    ordering_fields = ['application_deadline', 'package_lpa', 'created_at']
     
     def get_queryset(self):
         queryset = super().get_queryset()

@@ -122,3 +122,38 @@ class PlacementDriveAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['minimum_cgpa'], "8.50")
+
+    def test_ordering_drives(self):
+        PlacementDrive.objects.create(
+            company=self.company,
+            title="Drive 1",
+            job_role="Role 1",
+            package_lpa=8.0,
+            status="UPCOMING"
+        )
+        PlacementDrive.objects.create(
+            company=self.company,
+            title="Drive 2",
+            job_role="Role 2",
+            package_lpa=12.0,
+            status="OPEN"
+        )
+        PlacementDrive.objects.create(
+            company=self.company,
+            title="Drive 3",
+            job_role="Role 3",
+            package_lpa=6.0,
+            status="COMPLETED"
+        )
+        
+        # Order by package_lpa (ascending)
+        response = self.client.get(f"{self.url}?ordering=package_lpa")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        packages = [float(drive['package_lpa']) for drive in response.data if drive['package_lpa'] is not None]
+        self.assertEqual(packages, sorted(packages))
+
+        # Order by package_lpa (descending)
+        response = self.client.get(f"{self.url}?ordering=-package_lpa")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        packages_desc = [float(drive['package_lpa']) for drive in response.data if drive['package_lpa'] is not None]
+        self.assertEqual(packages_desc, sorted(packages_desc, reverse=True))
