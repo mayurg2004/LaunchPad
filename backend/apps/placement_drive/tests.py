@@ -89,3 +89,36 @@ class PlacementDriveAPITest(TestCase):
         response = self.client.get(f"{self.url}?search=Test Company")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
+
+    def test_filter_drives(self):
+        new_company = Company.objects.create(
+            company_name="Another Company",
+            company_type="PRODUCT",
+            email="hr2@test.com"
+        )
+        PlacementDrive.objects.create(
+            company=new_company,
+            title="Backend Developer Hiring",
+            job_role="Backend Developer",
+            package_lpa=14.0,
+            minimum_cgpa=8.5,
+            status="OPEN"
+        )
+        
+        # Filter by company
+        response = self.client.get(f"{self.url}?company={new_company.id}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['company'], new_company.id)
+
+        # Filter by status
+        response = self.client.get(f"{self.url}?status=OPEN")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['status'], "OPEN")
+
+        # Filter by minimum_cgpa
+        response = self.client.get(f"{self.url}?minimum_cgpa=8.5")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['minimum_cgpa'], "8.50")

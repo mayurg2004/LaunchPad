@@ -11,4 +11,16 @@ class PlacementDriveViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'job_role', 'company__company_name']
     
     def get_queryset(self):
-        return super().get_queryset()
+        queryset = super().get_queryset()
+        company = self.request.query_params.get('company')
+        status = self.request.query_params.get('status')
+        minimum_cgpa = self.request.query_params.get('minimum_cgpa')
+        
+        if company:
+            queryset = queryset.filter(company_id=company)
+        if status:
+            queryset = queryset.filter(status=status)
+        if minimum_cgpa:
+            queryset = queryset.filter(minimum_cgpa=minimum_cgpa)
+            
+        return queryset
