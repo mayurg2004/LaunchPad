@@ -30,7 +30,7 @@ class PlacementDriveAPITest(TestCase):
     def test_get_drives(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(len(response.data['results']), 1)
 
     def test_create_drive(self):
         data = {
@@ -76,19 +76,19 @@ class PlacementDriveAPITest(TestCase):
         # Search by title
         response = self.client.get(f"{self.url}?search=Software")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['title'], "Software Engineer Hiring")
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['title'], "Software Engineer Hiring")
         
         # Search by job role
         response = self.client.get(f"{self.url}?search=Scientist")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['title'], "Data Scientist Hiring")
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['title'], "Data Scientist Hiring")
         
         # Search by company name
         response = self.client.get(f"{self.url}?search=Test Company")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)
+        self.assertEqual(len(response.data['results']), 2)
 
     def test_filter_drives(self):
         new_company = Company.objects.create(
@@ -108,20 +108,20 @@ class PlacementDriveAPITest(TestCase):
         # Filter by company
         response = self.client.get(f"{self.url}?company={new_company.id}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['company'], new_company.id)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['company'], new_company.id)
 
         # Filter by status
         response = self.client.get(f"{self.url}?status=OPEN")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['status'], "OPEN")
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['status'], "OPEN")
 
         # Filter by minimum_cgpa
         response = self.client.get(f"{self.url}?minimum_cgpa=8.5")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['minimum_cgpa'], "8.50")
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['minimum_cgpa'], "8.50")
 
     def test_ordering_drives(self):
         PlacementDrive.objects.create(
@@ -149,11 +149,40 @@ class PlacementDriveAPITest(TestCase):
         # Order by package_lpa (ascending)
         response = self.client.get(f"{self.url}?ordering=package_lpa")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        packages = [float(drive['package_lpa']) for drive in response.data if drive['package_lpa'] is not None]
+        packages = [float(drive['package_lpa']) for drive in response.data['results'] if drive['package_lpa'] is not None]
         self.assertEqual(packages, sorted(packages))
 
         # Order by package_lpa (descending)
         response = self.client.get(f"{self.url}?ordering=-package_lpa")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        packages_desc = [float(drive['package_lpa']) for drive in response.data if drive['package_lpa'] is not None]
+        packages_desc = [float(drive['package_lpa']) for drive in response.data['results'] if drive['package_lpa'] is not None]
         self.assertEqual(packages_desc, sorted(packages_desc, reverse=True))
+
+    def test_pagination(self):
+        # Create many drives to test pagination
+        for i in range(15):
+            PlacementDrive.objects.create(
+                company=self.company,
+                title=f"Bulk Drive {i}",
+                job_role="Engineer",
+                status="UPCOMING"
+            )
+        
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should return 'count', 'next', 'previous', 'results' keys
+        self.assertIn('count', response.data)
+        self.assertIn('next', response.data)
+        self.assertIn('previous', response.data)
+        self.assertIn('results', response.data)
+        # Assuming page size is 10, check if we only got 10 results
+        self.assertEqual(len(response.data['results']), 10)
+        
+        # Test second page
+        response = self.client.get(f"{self.url}?page=2")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # 1 existing drive + 3 drives from ordering test + 15 bulk drives = 19 drives total?
+        # No, tests run independently so database rolls back after each test.
+        # This test starts with 1 existing drive from setUp, and adds 15. Total = 16.
+        # Page 2 should have 6 results.
+        self.assertEqual(len(response.data['results']), 6)
