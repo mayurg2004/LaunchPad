@@ -38,7 +38,7 @@ class PlacementDriveAPITest(TestCase):
             'title': 'Frontend Developer Hiring',
             'job_role': 'Frontend Developer',
             'package_lpa': 12.0,
-            'status': 'UPCOMING'
+            'status': 'DRAFT'
         }
         response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -70,7 +70,7 @@ class PlacementDriveAPITest(TestCase):
             title="Data Scientist Hiring",
             job_role="Data Scientist",
             package_lpa=15.0,
-            status="UPCOMING"
+            status="DRAFT"
         )
         
         # Search by title
@@ -129,7 +129,7 @@ class PlacementDriveAPITest(TestCase):
             title="Drive 1",
             job_role="Role 1",
             package_lpa=8.0,
-            status="UPCOMING"
+            status="DRAFT"
         )
         PlacementDrive.objects.create(
             company=self.company,
@@ -165,7 +165,7 @@ class PlacementDriveAPITest(TestCase):
                 company=self.company,
                 title=f"Bulk Drive {i}",
                 job_role="Engineer",
-                status="UPCOMING"
+                status="DRAFT"
             )
         
         response = self.client.get(self.url)
@@ -186,3 +186,24 @@ class PlacementDriveAPITest(TestCase):
         # This test starts with 1 existing drive from setUp, and adds 15. Total = 16.
         # Page 2 should have 6 results.
         self.assertEqual(len(response.data['results']), 6)
+
+    def test_update_status(self):
+        url = f"{self.url}{self.drive.id}/status/"
+        
+        # Test valid status
+        response = self.client.patch(url, {'status': 'OPEN'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'OPEN')
+        
+        # Verify DB is updated
+        self.drive.refresh_from_db()
+        self.assertEqual(self.drive.status, 'OPEN')
+        
+        # Test invalid status
+        response = self.client.patch(url, {'status': 'INVALID_STATUS'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+        
+        # Verify DB is NOT updated
+        self.drive.refresh_from_db()
+        self.assertEqual(self.drive.status, 'OPEN')

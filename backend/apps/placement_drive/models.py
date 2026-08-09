@@ -3,8 +3,9 @@ from companies.models import Company
 
 class PlacementDrive(models.Model):
     DRIVE_STATUS_CHOICES = [
-        ('UPCOMING', 'Upcoming'),
-        ('ONGOING', 'Ongoing'),
+        ('DRAFT', 'Draft'),
+        ('OPEN', 'Open'),
+        ('CLOSED', 'Closed'),
         ('COMPLETED', 'Completed'),
         ('CANCELLED', 'Cancelled'),
     ]
@@ -19,7 +20,7 @@ class PlacementDrive(models.Model):
     eligible_branch = models.CharField(max_length=255, blank=True, help_text="E.g., CSE, ISE, ECE or All")
     application_deadline = models.DateTimeField(null=True, blank=True)
     drive_date = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=DRIVE_STATUS_CHOICES, default='UPCOMING')
+    status = models.CharField(max_length=20, choices=DRIVE_STATUS_CHOICES, default='DRAFT')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

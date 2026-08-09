@@ -1,4 +1,6 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from .models import PlacementDrive
@@ -32,3 +34,18 @@ class PlacementDriveViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(minimum_cgpa=minimum_cgpa)
             
         return queryset
+
+    @action(detail=True, methods=['patch'])
+    def status(self, request, pk=None):
+        drive = self.get_object()
+        new_status = request.data.get('status')
+        
+        valid_statuses = [choice[0] for choice in PlacementDrive.DRIVE_STATUS_CHOICES]
+        if new_status not in valid_statuses:
+            return Response({'error': 'Invalid status provided.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        drive.status = new_status
+        drive.save()
+        
+        serializer = self.get_serializer(drive)
+        return Response(serializer.data)
