@@ -1,5 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APIClient
 from placement_drive.models import PlacementDrive
@@ -207,3 +209,55 @@ class PlacementDriveAPITest(TestCase):
         # Verify DB is NOT updated
         self.drive.refresh_from_db()
         self.assertEqual(self.drive.status, 'OPEN')
+
+    def test_upcoming_drives(self):
+        url = f"{self.url}upcoming/"
+        
+        # Drive 1: Future and OPEN (Should be included)
+        future_date_1 = timezone.now() + timedelta(days=5)
+        drive1 = PlacementDrive.objects.create(
+            company=self.company,
+            title="Future Open Drive 1",
+            job_role="Role",
+            status="OPEN",
+            drive_date=future_date_1
+        )
+        
+        # Drive 2: Future and OPEN, but closer date (Should be first)
+        future_date_2 = timezone.now() + timedelta(days=2)
+        drive2 = PlacementDrive.objects.create(
+            company=self.company,
+            title="Future Open Drive 2",
+            job_role="Role",
+            status="OPEN",
+            drive_date=future_date_2
+        )
+        
+        # Drive 3: Future but DRAFT (Should NOT be included)
+        PlacementDrive.objects.create(
+            company=self.company,
+            title="Future Draft Drive",
+            job_role="Role",
+            status="DRAFT",
+            drive_date=future_date_1
+        )
+        
+        # Drive 4: Past and OPEN (Should NOT be included)
+        PlacementDrive.objects.create(
+            company=self.company,
+            title="Past Open Drive",
+            job_role="Role",
+            status="OPEN",
+            drive_date=timezone.now() - timedelta(days=1)
+        )
+        
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Check that only the 2 future OPEN drives are returned
+        results = response.data['results']
+        self.assertEqual(len(results), 2)
+        
+        # Check ordering (closest drive_date first)
+        self.assertEqual(results[0]['id'], drive2.id)
+        self.assertEqual(results[1]['id'], drive1.id)

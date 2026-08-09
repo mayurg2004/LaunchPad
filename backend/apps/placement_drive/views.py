@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -48,4 +49,25 @@ class PlacementDriveViewSet(viewsets.ModelViewSet):
         drive.save()
         
         serializer = self.get_serializer(drive)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def upcoming(self, request):
+        queryset = self.get_queryset()
+        
+        # Filter for OPEN and future drives, with default ordering
+        queryset = queryset.filter(
+            status='OPEN',
+            drive_date__gt=timezone.now()
+        ).order_by('drive_date')
+        
+        # Apply SearchFilter, OrderingFilter
+        queryset = self.filter_queryset(queryset)
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
