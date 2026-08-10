@@ -218,3 +218,137 @@ class InterviewAPITest(TestCase):
         # Try status update
         response = self.client.patch(f'{self.url}{interview.id}/status/', {'status': 'IN_PROGRESS'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_interview_filtering(self):
+        Interview.objects.create(
+            application=self.application,
+            round_name='Tech Round',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date,
+            status='SCHEDULED',
+            result='PENDING'
+        )
+        Interview.objects.create(
+            application=self.application,
+            round_name='HR Round',
+            round_type='HR',
+            scheduled_at=self.future_date,
+            status='COMPLETED',
+            result='PASSED'
+        )
+        
+        self.client.force_authenticate(user=self.officer_user)
+        
+        # Filter by round_type
+        response = self.client.get(f'{self.url}?round_type=HR')
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['round_type'], 'HR')
+        
+        # Filter by status
+        response = self.client.get(f'{self.url}?status=COMPLETED')
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['status'], 'COMPLETED')
+        
+        # Filter by result
+        response = self.client.get(f'{self.url}?result=PASSED')
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['result'], 'PASSED')
+
+    def test_interview_ordering(self):
+        interview1 = Interview.objects.create(
+            application=self.application,
+            round_name='Round 1',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date + timedelta(days=2)
+        )
+        interview2 = Interview.objects.create(
+            application=self.application,
+            round_name='Round 2',
+            round_type='HR',
+            scheduled_at=self.future_date + timedelta(days=1)
+        )
+        
+        self.client.force_authenticate(user=self.officer_user)
+        
+        # Order by scheduled_at (ascending)
+        response = self.client.get(f'{self.url}?ordering=scheduled_at')
+        self.assertEqual(response.data[0]['id'], interview2.id)
+        self.assertEqual(response.data[1]['id'], interview1.id)
+        
+        # Order by scheduled_at (descending)
+        response = self.client.get(f'{self.url}?ordering=-scheduled_at')
+        self.assertEqual(response.data[0]['id'], interview1.id)
+        self.assertEqual(response.data[1]['id'], interview2.id)
+
+    def test_upcoming_interviews(self):
+        # 1. Valid upcoming
+        valid_upcoming = Interview.objects.create(
+            application=self.application,
+            round_name='Upcoming Round',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date + timedelta(days=1),
+            status='SCHEDULED'
+        )
+        
+        # 2. Nearest upcoming
+        nearest_upcoming = Interview.objects.create(
+            application=self.application,
+            round_name='Nearest Upcoming',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date,
+            status='SCHEDULED'
+        )
+        
+        # 3. Past interview (should be excluded)
+        # Bypassing validation by updating DB directly or just mocking time
+        past_interview = Interview(
+            application=self.application,
+            round_name='Past Round',
+            round_type='TECHNICAL',
+            scheduled_at=timezone.now() - timedelta(days=1),
+            status='SCHEDULED'
+        )
+        past_interview.save()
+        
+        # 4. Cancelled interview (should be excluded)
+        cancelled_interview = Interview.objects.create(
+            application=self.application,
+            round_name='Cancelled Round',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date + timedelta(days=2),
+            status='CANCELLED'
+        )
+        
+        # 5. Other student's upcoming interview (should be excluded)
+        other_student_user = User.objects.create_user(email='other@test.com', password='testpassword', role=UserRole.STUDENT)
+        other_student = Student.objects.create(
+            user=other_student_user,
+            enrollment_number="ENR002",
+            branch="CSE",
+            year=4,
+            semester=8,
+            cgpa=8.5
+        )
+        other_app = Application.objects.create(
+            student=other_student,
+            placement_drive=self.open_drive,
+            status="SHORTLISTED"
+        )
+        other_upcoming = Interview.objects.create(
+            application=other_app,
+            round_name='Other Student Upcoming',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date,
+            status='SCHEDULED'
+        )
+        
+        self.client.force_authenticate(user=self.student_user)
+        
+        response = self.client.get(f'{self.url}upcoming/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Should only contain nearest_upcoming and valid_upcoming, in that order
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]['id'], nearest_upcoming.id)
+        self.assertEqual(response.data[1]['id'], valid_upcoming.id)
+
