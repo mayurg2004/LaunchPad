@@ -21,3 +21,25 @@ class InterviewSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({"scheduled_at": "Scheduled time must be in the future."})
                     
         return data
+
+class InterviewStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Interview
+        fields = ['status']
+        
+    def validate_status(self, value):
+        valid_statuses = [choice[0] for choice in Interview.STATUS_CHOICES]
+        if value not in valid_statuses:
+            raise serializers.ValidationError("Invalid status provided.")
+        return value
+
+class InterviewResultUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Interview
+        fields = ['result']
+        
+    def validate_result(self, value):
+        valid_results = [choice[0] for choice in Interview.RESULT_CHOICES]
+        if value not in valid_results:
+            raise serializers.ValidationError("Invalid result provided.")
+        return value

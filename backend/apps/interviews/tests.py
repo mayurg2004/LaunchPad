@@ -139,3 +139,82 @@ class InterviewAPITest(TestCase):
         # PATCH
         response = self.client.patch(f'{self.url}{interview.id}/', {'status': 'COMPLETED'})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_permissions(self):
+        admin_user = User.objects.create_user(email='admin@test.com', password='testpassword', role=UserRole.ADMIN)
+        interview = Interview.objects.create(
+            application=self.application,
+            round_name='Admin Round',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date
+        )
+        self.client.force_authenticate(user=admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Admin can update
+        response = self.client.patch(f'{self.url}{interview.id}/', {'status': 'CANCELLED'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+    def test_status_update_endpoint(self):
+        interview = Interview.objects.create(
+            application=self.application,
+            round_name='HR Round',
+            round_type='HR',
+            scheduled_at=self.future_date
+        )
+        self.client.force_authenticate(user=self.officer_user)
+        response = self.client.patch(f'{self.url}{interview.id}/status/', {'status': 'COMPLETED'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        interview.refresh_from_db()
+        self.assertEqual(interview.status, 'COMPLETED')
+        
+        # Invalid status
+        response = self.client.patch(f'{self.url}{interview.id}/status/', {'status': 'INVALID'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('status', response.data)
+
+    def test_result_update_endpoint(self):
+        interview = Interview.objects.create(
+            application=self.application,
+            round_name='HR Round',
+            round_type='HR',
+            scheduled_at=self.future_date
+        )
+        self.client.force_authenticate(user=self.officer_user)
+        response = self.client.patch(f'{self.url}{interview.id}/result/', {'result': 'PASSED'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        interview.refresh_from_db()
+        self.assertEqual(interview.result, 'PASSED')
+        
+        # Invalid result
+        response = self.client.patch(f'{self.url}{interview.id}/result/', {'result': 'INVALID'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('result', response.data)
+        
+    def test_recruiter_permissions(self):
+        # We simulate a recruiter by creating a user and attaching a mock profile
+        recruiter_user = User.objects.create_user(email='recruiter@test.com', password='testpassword', role=UserRole.RECRUITER)
+        
+        class MockRecruiterProfile:
+            pass
+            
+        mock_profile = MockRecruiterProfile()
+        mock_profile.company = self.company
+        recruiter_user.recruiter_profile = mock_profile
+        
+        interview = Interview.objects.create(
+            application=self.application,
+            round_name='Tech Round',
+            round_type='TECHNICAL',
+            scheduled_at=self.future_date
+        )
+        
+        self.client.force_authenticate(user=recruiter_user)
+        
+        # Should be able to view and manage for their company
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Try status update
+        response = self.client.patch(f'{self.url}{interview.id}/status/', {'status': 'IN_PROGRESS'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
