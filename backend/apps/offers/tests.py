@@ -295,3 +295,98 @@ class OfferAPITest(TestCase):
         response = self.client.patch(f"{self.url}{offer.id}/respond/", {'status': 'ACCEPTED'})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Cannot respond to an offer that is already", str(response.data))
+
+    def test_my_offers(self):
+        Offer.objects.create(
+            application=self.application, student=self.student, company=self.company,
+            placement_drive=self.drive, offer_type='FULL_TIME', job_title='SDE',
+            package_lpa='10.50', joining_location='Bangalore', joining_date=date.today(),
+            offer_date=date.today(), status='PENDING'
+        )
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(f"{self.url}my-offers/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_my_offers_permissions(self):
+        self.client.force_authenticate(user=self.officer_user)
+        response = self.client.get(f"{self.url}my-offers/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_accepted_offers(self):
+        Offer.objects.create(
+            application=self.application, student=self.student, company=self.company,
+            placement_drive=self.drive, offer_type='FULL_TIME', job_title='SDE',
+            package_lpa='10.50', joining_location='Bangalore', joining_date=date.today(),
+            offer_date=date.today(), status='ACCEPTED'
+        )
+        self.client.force_authenticate(user=self.officer_user)
+        response = self.client.get(f"{self.url}accepted/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_accepted_offers_permissions(self):
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(f"{self.url}accepted/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_filtering(self):
+        Offer.objects.create(
+            application=self.application, student=self.student, company=self.company,
+            placement_drive=self.drive, offer_type='FULL_TIME', job_title='SDE',
+            package_lpa='10.50', joining_location='Bangalore', joining_date=date.today(),
+            offer_date=date.today(), status='PENDING'
+        )
+        self.client.force_authenticate(user=self.officer_user)
+        
+        # Test company filter
+        response = self.client.get(f"{self.url}?company={self.company.id}")
+        self.assertEqual(len(response.data), 1)
+        
+        response = self.client.get(f"{self.url}?company=999")
+        self.assertEqual(len(response.data), 0)
+
+        # Test status filter
+        response = self.client.get(f"{self.url}?status=PENDING")
+        self.assertEqual(len(response.data), 1)
+        
+        response = self.client.get(f"{self.url}?status=ACCEPTED")
+        self.assertEqual(len(response.data), 0)
+
+    def test_ordering(self):
+        Offer.objects.create(
+            application=self.application, student=self.student, company=self.company,
+            placement_drive=self.drive, offer_type='FULL_TIME', job_title='SDE1',
+            package_lpa='10.50', joining_location='Bangalore', joining_date=date.today(),
+            offer_date=date.today(), status='PENDING'
+        )
+        Offer.objects.create(
+            application=self.application, student=self.student, company=self.company,
+            placement_drive=self.drive, offer_type='FULL_TIME', job_title='SDE2',
+            package_lpa='12.50', joining_location='Bangalore', joining_date=date.today(),
+            offer_date=date.today(), status='REJECTED' # We use rejected so unique constraint isn't violated
+        )
+        
+        self.client.force_authenticate(user=self.officer_user)
+        response = self.client.get(f"{self.url}?ordering=-package_lpa")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(float(response.data[0]['package_lpa']), 12.50)
+        self.assertEqual(float(response.data[1]['package_lpa']), 10.50)
+
+    def test_placement_status(self):
+        Offer.objects.create(
+            application=self.application, student=self.student, company=self.company,
+            placement_drive=self.drive, offer_type='FULL_TIME', job_title='SDE',
+            package_lpa='10.50', joining_location='Bangalore', joining_date=date.today(),
+            offer_date=date.today(), status='ACCEPTED'
+        )
+        self.student.is_placed = True
+        self.student.save()
+        
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(f"{self.url}placement-status/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_placed'])
+        self.assertEqual(response.data['total_offers'], 1)
+        self.assertEqual(response.data['accepted_offers'], 1)
+        self.assertEqual(response.data['rejected_offers'], 0)
