@@ -25,4 +25,5 @@ urlpatterns = [
     path('api/placement-drives/', include('placement_drive.urls')),
     path('api/', include('applications.urls')),
     path('api/', include('interviews.urls')),
+    path('api/', include('offers.urls')),
 ]
