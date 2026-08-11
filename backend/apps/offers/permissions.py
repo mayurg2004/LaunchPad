@@ -13,16 +13,19 @@ class IsPlacementOfficerOrAdmin(permissions.BasePermission):
 
 class IsStudentViewer(permissions.BasePermission):
     """
-    Students can only view their own offers.
+    Students can only view their own offers, and respond to them via the 'respond' action.
     """
     def has_permission(self, request, view):
         if request.user.role == UserRole.STUDENT:
-            return request.method in permissions.SAFE_METHODS
+            if request.method in permissions.SAFE_METHODS:
+                return True
+            if view.action == 'respond' and request.method == 'PATCH':
+                return True
         return False
 
     def has_object_permission(self, request, view, obj):
         if request.user.role == UserRole.STUDENT:
-            if request.method in permissions.SAFE_METHODS:
+            if request.method in permissions.SAFE_METHODS or (view.action == 'respond' and request.method == 'PATCH'):
                 return hasattr(request.user, 'student_profile') and obj.student == request.user.student_profile
         return False
 

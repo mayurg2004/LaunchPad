@@ -51,3 +51,16 @@ class OfferSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("This application already has an active offer.")
 
         return data
+
+class RespondOfferSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=[('ACCEPTED', 'Accepted'), ('REJECTED', 'Rejected')])
+
+    def validate(self, data):
+        offer = self.context.get('offer')
+        if not offer:
+            raise serializers.ValidationError("Offer instance is required in context.")
+            
+        if offer.status in ['ACCEPTED', 'REJECTED', 'WITHDRAWN']:
+            raise serializers.ValidationError("Cannot respond to an offer that is already ACCEPTED, REJECTED, or WITHDRAWN.")
+            
+        return data

@@ -178,3 +178,120 @@ class OfferAPITest(TestCase):
                 offer_date=date.today(),
                 status='PENDING'
             )
+
+    def test_student_accepts_own_offer(self):
+        offer = Offer.objects.create(
+            application=self.application,
+            student=self.student,
+            company=self.company,
+            placement_drive=self.drive,
+            offer_type='FULL_TIME',
+            job_title='SDE',
+            package_lpa='10.50',
+            joining_location='Bangalore',
+            joining_date=date.today() + timedelta(days=30),
+            offer_date=date.today(),
+            status='PENDING'
+        )
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.patch(f"{self.url}{offer.id}/respond/", {'status': 'ACCEPTED'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, 'ACCEPTED')
+        
+        # Check student is placed
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.is_placed)
+        
+        # Check application status
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, 'SELECTED')
+
+    def test_student_rejects_own_offer(self):
+        offer = Offer.objects.create(
+            application=self.application,
+            student=self.student,
+            company=self.company,
+            placement_drive=self.drive,
+            offer_type='FULL_TIME',
+            job_title='SDE',
+            package_lpa='10.50',
+            joining_location='Bangalore',
+            joining_date=date.today() + timedelta(days=30),
+            offer_date=date.today(),
+            status='PENDING'
+        )
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.patch(f"{self.url}{offer.id}/respond/", {'status': 'REJECTED'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        offer.refresh_from_db()
+        self.assertEqual(offer.status, 'REJECTED')
+        
+        # Check student is not placed
+        self.student.refresh_from_db()
+        self.assertFalse(self.student.is_placed)
+
+    def test_student_cannot_respond_to_others_offer(self):
+        offer = Offer.objects.create(
+            application=self.application,
+            student=self.student,
+            company=self.company,
+            placement_drive=self.drive,
+            offer_type='FULL_TIME',
+            job_title='SDE',
+            package_lpa='10.50',
+            joining_location='Bangalore',
+            joining_date=date.today() + timedelta(days=30),
+            offer_date=date.today(),
+            status='PENDING'
+        )
+        
+        # Create another student
+        other_user = User.objects.create_user(email='other@test.com', password='testpassword', role=UserRole.STUDENT)
+        other_student = Student.objects.create(
+            user=other_user, enrollment_number="ENR002", branch="CSE", year=4, semester=8, cgpa=8.5
+        )
+        
+        self.client.force_authenticate(user=other_user)
+        response = self.client.patch(f"{self.url}{offer.id}/respond/", {'status': 'ACCEPTED'})
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND) # Because of get_queryset
+
+    def test_already_accepted_offer_cannot_be_changed(self):
+        offer = Offer.objects.create(
+            application=self.application,
+            student=self.student,
+            company=self.company,
+            placement_drive=self.drive,
+            offer_type='FULL_TIME',
+            job_title='SDE',
+            package_lpa='10.50',
+            joining_location='Bangalore',
+            joining_date=date.today() + timedelta(days=30),
+            offer_date=date.today(),
+            status='ACCEPTED'
+        )
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.patch(f"{self.url}{offer.id}/respond/", {'status': 'REJECTED'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Cannot respond to an offer that is already", str(response.data))
+
+    def test_already_rejected_offer_cannot_be_changed(self):
+        offer = Offer.objects.create(
+            application=self.application,
+            student=self.student,
+            company=self.company,
+            placement_drive=self.drive,
+            offer_type='FULL_TIME',
+            job_title='SDE',
+            package_lpa='10.50',
+            joining_location='Bangalore',
+            joining_date=date.today() + timedelta(days=30),
+            offer_date=date.today(),
+            status='REJECTED'
+        )
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.patch(f"{self.url}{offer.id}/respond/", {'status': 'ACCEPTED'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Cannot respond to an offer that is already", str(response.data))
