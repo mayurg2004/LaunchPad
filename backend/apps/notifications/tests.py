@@ -76,6 +76,60 @@ class NotificationAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Notification.objects.filter(recipient=self.user1).count(), 1)
 
+    def test_mark_notification_as_read_action(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.patch(f"{self.url}{self.notification1.id}/read/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.notification1.refresh_from_db()
+        self.assertTrue(self.notification1.is_read)
+
+    def test_mark_all_as_read(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.patch(f"{self.url}read-all/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.notification1.refresh_from_db()
+        self.assertTrue(self.notification1.is_read)
+        self.assertEqual(Notification.objects.filter(recipient=self.user1, is_read=False).count(), 0)
+
+    def test_notification_summary(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(f"{self.url}summary/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_notifications'], 2)
+        self.assertEqual(response.data['unread_notifications'], 1)
+        self.assertEqual(response.data['read_notifications'], 1)
+
+    def test_filtering_and_ordering(self):
+        self.client.force_authenticate(user=self.user1)
+        # Test filtering by notification_type
+        response = self.client.get(f"{self.url}?notification_type=SYSTEM")
+        self.assertEqual(len(response.data['results']), 1)
+        
+        # Test filtering by is_read
+        response = self.client.get(f"{self.url}?is_read=True")
+        self.assertEqual(len(response.data['results']), 1)
+        
+        # Test ordering
+        response = self.client.get(f"{self.url}?ordering=created_at")
+        self.assertEqual(response.data['results'][0]['id'], self.notification1.id)
+
+    def test_pagination(self):
+        # Create enough notifications to trigger pagination
+        for i in range(12):
+            Notification.objects.create(recipient=self.user1, title=f"Paginate {i}", message="Msg", notification_type="SYSTEM")
+            
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('next', response.data)
+        self.assertEqual(len(response.data['results']), 10)
+
+    def test_permissions_read_action(self):
+        self.client.force_authenticate(user=self.user1)
+        # Try to read user2's notification
+        response = self.client.patch(f"{self.url}{self.notification_user2.id}/read/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
 from applications.models import Application
 from placement_drive.models import PlacementDrive
 from companies.models import Company
