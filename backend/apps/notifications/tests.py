@@ -75,3 +75,106 @@ class NotificationAPITest(TestCase):
         response = self.client.delete(f"{self.url}{self.notification1.id}/")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Notification.objects.filter(recipient=self.user1).count(), 1)
+
+from applications.models import Application
+from placement_drive.models import PlacementDrive
+from companies.models import Company
+from students.models import Student
+from interviews.models import Interview
+from offers.models import Offer
+from django.utils import timezone
+from datetime import timedelta, date
+
+class NotificationTriggersTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email='student@test.com', password='password', role=UserRole.STUDENT)
+        self.student = Student.objects.create(
+            user=self.user, enrollment_number="ENR123", branch="CSE", year=4, semester=8, cgpa=8.5
+        )
+        self.company = Company.objects.create(company_name="Tech Corp")
+        self.drive = PlacementDrive.objects.create(
+            company=self.company, title="SDE Hiring", job_role="SDE", status="OPEN",
+            application_deadline=timezone.now() + timedelta(days=2), minimum_cgpa=7.0, eligible_branch="CSE"
+        )
+        # Clear any notifications created so far (none should exist yet, but to be safe)
+        Notification.objects.all().delete()
+
+    def test_application_submitted_notification(self):
+        Application.objects.create(student=self.student, placement_drive=self.drive)
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user, title="Application Submitted", notification_type="APPLICATION"
+        ).exists())
+
+    def test_application_shortlisted_notification(self):
+        app = Application.objects.create(student=self.student, placement_drive=self.drive)
+        Notification.objects.all().delete() # clear submit notification
+        
+        app.status = 'SHORTLISTED'
+        app.save()
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user, title="Application Shortlisted", notification_type="APPLICATION"
+        ).exists())
+
+    def test_application_rejected_notification(self):
+        app = Application.objects.create(student=self.student, placement_drive=self.drive)
+        Notification.objects.all().delete() # clear submit notification
+        
+        app.status = 'REJECTED'
+        app.save()
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user, title="Application Update", notification_type="APPLICATION"
+        ).exists())
+
+    def test_interview_scheduled_notification(self):
+        app = Application.objects.create(student=self.student, placement_drive=self.drive)
+        Notification.objects.all().delete()
+        
+        Interview.objects.create(
+            application=app, round_name="Round 1", round_type="TECHNICAL",
+            scheduled_at=timezone.now() + timedelta(days=1)
+        )
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user, title="Interview Scheduled", notification_type="INTERVIEW"
+        ).exists())
+
+    def test_interview_passed_notification(self):
+        app = Application.objects.create(student=self.student, placement_drive=self.drive)
+        interview = Interview.objects.create(
+            application=app, round_name="Round 1", round_type="TECHNICAL",
+            scheduled_at=timezone.now() + timedelta(days=1), status='COMPLETED'
+        )
+        Notification.objects.all().delete()
+        
+        interview.result = 'PASSED'
+        interview.save()
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user, title="Interview Passed", notification_type="INTERVIEW"
+        ).exists())
+
+    def test_interview_failed_notification(self):
+        app = Application.objects.create(student=self.student, placement_drive=self.drive)
+        interview = Interview.objects.create(
+            application=app, round_name="Round 1", round_type="TECHNICAL",
+            scheduled_at=timezone.now() + timedelta(days=1), status='COMPLETED'
+        )
+        Notification.objects.all().delete()
+        
+        interview.result = 'FAILED'
+        interview.save()
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user, title="Interview Update", notification_type="INTERVIEW"
+        ).exists())
+
+    def test_offer_received_notification(self):
+        app = Application.objects.create(student=self.student, placement_drive=self.drive)
+        Notification.objects.all().delete()
+        
+        Offer.objects.create(
+            application=app, student=self.student, company=self.company,
+            placement_drive=self.drive, offer_type='FULL_TIME', job_title='SDE',
+            package_lpa='10.50', joining_location='Bangalore', joining_date=date.today(),
+            offer_date=date.today(), status='PENDING'
+        )
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user, title="New Offer Received", notification_type="OFFER"
+        ).exists())
