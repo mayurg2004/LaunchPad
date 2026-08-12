@@ -22,3 +22,16 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.recipient.email} - {self.title}"
+
+class NotificationPreference(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notification_preference')
+    placement_drive_notifications = models.BooleanField(default=True)
+    application_notifications = models.BooleanField(default=True)
+    interview_notifications = models.BooleanField(default=True)
+    offer_notifications = models.BooleanField(default=True)
+    system_notifications = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.email} - Preferences"

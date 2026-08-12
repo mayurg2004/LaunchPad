@@ -3,8 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from .models import Notification
-from .serializers import NotificationSerializer
+from .models import Notification, NotificationPreference
+from .serializers import NotificationSerializer, NotificationPreferenceSerializer
 
 class NotificationPagination(PageNumberPagination):
     page_size = 10
@@ -82,3 +82,17 @@ class NotificationViewSet(
             'unread_notifications': unread_notifications,
             'read_notifications': read_notifications
         })
+
+    @action(detail=False, methods=['get', 'patch'])
+    def preferences(self, request):
+        preference, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        
+        if request.method == 'GET':
+            serializer = NotificationPreferenceSerializer(preference)
+            return Response(serializer.data)
+        elif request.method == 'PATCH':
+            serializer = NotificationPreferenceSerializer(preference, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

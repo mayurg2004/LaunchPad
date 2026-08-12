@@ -232,3 +232,78 @@ class NotificationTriggersTest(TestCase):
         self.assertTrue(Notification.objects.filter(
             recipient=self.user, title="New Offer Received", notification_type="OFFER"
         ).exists())
+
+from .models import NotificationPreference
+
+class NotificationPreferenceTest(TestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(email='pref1@test.com', password='password', role=UserRole.STUDENT)
+        self.user2 = User.objects.create_user(email='pref2@test.com', password='password', role=UserRole.STUDENT)
+        self.student = Student.objects.create(
+            user=self.user1, enrollment_number="ENR999", branch="CSE", year=4, semester=8, cgpa=8.5
+        )
+        self.company = Company.objects.create(company_name="Pref Corp")
+        self.drive = PlacementDrive.objects.create(
+            company=self.company, title="Pref Hiring", job_role="SDE", status="OPEN",
+            application_deadline=timezone.now() + timedelta(days=2), minimum_cgpa=7.0, eligible_branch="CSE"
+        )
+        self.url = '/api/notifications/preferences/'
+        self.client = APIClient()
+
+    def test_default_preferences_created(self):
+        pref = NotificationPreference.objects.get(user=self.user1)
+        self.assertTrue(pref.application_notifications)
+        self.assertTrue(pref.interview_notifications)
+        self.assertTrue(pref.offer_notifications)
+        self.assertTrue(pref.placement_drive_notifications)
+        self.assertTrue(pref.system_notifications)
+
+    def test_user_can_view_own_preferences(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['application_notifications'])
+
+    def test_user_can_update_preferences(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.patch(self.url, {'application_notifications': False})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        pref = NotificationPreference.objects.get(user=self.user1)
+        self.assertFalse(pref.application_notifications)
+
+    def test_user_cannot_modify_another_users_preferences(self):
+        # The endpoint uses request.user, so by design they cannot pass a user ID to edit someone else.
+        # But we verify it explicitly handles only their own.
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.patch(self.url, {'application_notifications': False})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        pref2 = NotificationPreference.objects.get(user=self.user2)
+        self.assertTrue(pref2.application_notifications) # User 2 is unchanged
+
+    def test_disabled_preference_prevents_notification(self):
+        # Disable application notifications
+        pref = NotificationPreference.objects.get(user=self.user1)
+        pref.application_notifications = False
+        pref.save()
+        
+        Notification.objects.all().delete()
+        Application.objects.create(student=self.student, placement_drive=self.drive)
+        
+        self.assertFalse(Notification.objects.filter(
+            recipient=self.user1, notification_type="APPLICATION"
+        ).exists())
+
+    def test_enabled_preference_allows_notification(self):
+        # Enable application notifications
+        pref = NotificationPreference.objects.get(user=self.user1)
+        pref.application_notifications = True
+        pref.save()
+        
+        Notification.objects.all().delete()
+        Application.objects.create(student=self.student, placement_drive=self.drive)
+        
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.user1, notification_type="APPLICATION"
+        ).exists())

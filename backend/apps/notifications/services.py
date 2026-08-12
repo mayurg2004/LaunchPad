@@ -1,8 +1,25 @@
-from .models import Notification
+from .models import Notification, NotificationPreference
 
 class NotificationService:
     @staticmethod
+    def should_send(user, notification_type):
+        pref, _ = NotificationPreference.objects.get_or_create(user=user)
+        if notification_type == 'APPLICATION':
+            return pref.application_notifications
+        elif notification_type == 'INTERVIEW':
+            return pref.interview_notifications
+        elif notification_type == 'OFFER':
+            return pref.offer_notifications
+        elif notification_type == 'PLACEMENT_DRIVE':
+            return pref.placement_drive_notifications
+        elif notification_type == 'SYSTEM':
+            return pref.system_notifications
+        return True
+
+    @staticmethod
     def notify_application_submitted(application):
+        if not NotificationService.should_send(application.student.user, 'APPLICATION'):
+            return
         Notification.objects.create(
             recipient=application.student.user,
             title="Application Submitted",
@@ -12,6 +29,8 @@ class NotificationService:
 
     @staticmethod
     def notify_application_shortlisted(application):
+        if not NotificationService.should_send(application.student.user, 'APPLICATION'):
+            return
         Notification.objects.create(
             recipient=application.student.user,
             title="Application Shortlisted",
@@ -21,6 +40,8 @@ class NotificationService:
 
     @staticmethod
     def notify_application_rejected(application):
+        if not NotificationService.should_send(application.student.user, 'APPLICATION'):
+            return
         Notification.objects.create(
             recipient=application.student.user,
             title="Application Update",
@@ -31,6 +52,8 @@ class NotificationService:
     @staticmethod
     def notify_interview_scheduled(interview):
         application = interview.application
+        if not NotificationService.should_send(application.student.user, 'INTERVIEW'):
+            return
         Notification.objects.create(
             recipient=application.student.user,
             title="Interview Scheduled",
@@ -41,6 +64,8 @@ class NotificationService:
     @staticmethod
     def notify_interview_passed(interview):
         application = interview.application
+        if not NotificationService.should_send(application.student.user, 'INTERVIEW'):
+            return
         Notification.objects.create(
             recipient=application.student.user,
             title="Interview Passed",
@@ -51,6 +76,8 @@ class NotificationService:
     @staticmethod
     def notify_interview_failed(interview):
         application = interview.application
+        if not NotificationService.should_send(application.student.user, 'INTERVIEW'):
+            return
         Notification.objects.create(
             recipient=application.student.user,
             title="Interview Update",
@@ -60,6 +87,8 @@ class NotificationService:
 
     @staticmethod
     def notify_offer_received(offer):
+        if not NotificationService.should_send(offer.student.user, 'OFFER'):
+            return
         Notification.objects.create(
             recipient=offer.student.user,
             title="New Offer Received",
