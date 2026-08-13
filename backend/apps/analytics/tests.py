@@ -203,3 +203,74 @@ class DepartmentAnalyticsAPITestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.data
         self.assertEqual(len(data), 0)
+
+class CompanyAnalyticsAPITestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('analytics-companies')
+
+        self.admin_user = User.objects.create_user(email='admin@test.com', password='password', role=UserRole.ADMIN, first_name='A', last_name='A')
+        self.po_user = User.objects.create_user(email='po@test.com', password='password', role=UserRole.PLACEMENT_OFFICER, first_name='P', last_name='O')
+        self.student_user = User.objects.create_user(email='student@test.com', password='password', role=UserRole.STUDENT, first_name='S', last_name='S')
+        self.recruiter_user = User.objects.create_user(email='recruiter@test.com', password='password', role=UserRole.RECRUITER, first_name='R', last_name='R')
+
+    def test_permissions(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.po_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.recruiter_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_company_analytics(self):
+        c1 = Company.objects.create(company_name='Company A')
+        c2 = Company.objects.create(company_name='Company B')
+        
+        pd1 = PlacementDrive.objects.create(company=c1, title='Drive 1', job_role='SDE')
+        
+        u1 = User.objects.create_user(email='s1@test.com', password='password', role=UserRole.STUDENT, first_name='A', last_name='B')
+        s1 = Student.objects.create(user=u1, enrollment_number='S1', branch='CSE', year=4, semester=8, cgpa=8.5)
+        
+        u2 = User.objects.create_user(email='s2@test.com', password='password', role=UserRole.STUDENT, first_name='C', last_name='D')
+        s2 = Student.objects.create(user=u2, enrollment_number='S2', branch='CSE', year=4, semester=8, cgpa=8.5)
+
+        # App 1: SELECTED
+        Application.objects.create(student=s1, placement_drive=pd1, status='SELECTED')
+        # App 2: SHORTLISTED
+        Application.objects.create(student=s2, placement_drive=pd1, status='SHORTLISTED')
+
+        # 2 offers for Company A
+        Offer.objects.create(application_id=1, student=s1, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=10.0, joining_location='BLR', joining_date=timezone.now().date(), offer_date=timezone.now().date())
+        Offer.objects.create(application_id=2, student=s2, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=20.0, joining_location='BLR', joining_date=timezone.now().date(), offer_date=timezone.now().date())
+        
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        
+        self.assertEqual(len(data), 2)
+
+        # C1 should be first because of 2 offers (ordered by total_offers desc)
+        self.assertEqual(data[0]['company_name'], 'Company A')
+        self.assertEqual(data[0]['total_applications'], 2)
+        self.assertEqual(data[0]['shortlisted_applications'], 1)
+        self.assertEqual(data[0]['selected_applications'], 1)
+        self.assertEqual(data[0]['total_offers'], 2)
+        self.assertEqual(data[0]['average_package_lpa'], 15.0)
+
+        # C2 should have 0s
+        self.assertEqual(data[1]['company_name'], 'Company B')
+        self.assertEqual(data[1]['total_applications'], 0)
+        self.assertEqual(data[1]['shortlisted_applications'], 0)
+        self.assertEqual(data[1]['selected_applications'], 0)
+        self.assertEqual(data[1]['total_offers'], 0)
+        self.assertEqual(data[1]['average_package_lpa'], 0.0)

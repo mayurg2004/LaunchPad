@@ -74,3 +74,34 @@ class DepartmentAnalyticsView(APIView):
         response_data.sort(key=lambda x: x['placement_percentage'], reverse=True)
 
         return Response(response_data)
+
+class CompanyAnalyticsView(APIView):
+    permission_classes = [IsAdminOrPlacementOfficer]
+
+    def get(self, request):
+        from django.db.models import Count, Q, Avg
+
+        companies_data = Company.objects.annotate(
+            total_applications=Count('placement_drives__applications', distinct=True),
+            shortlisted_applications=Count('placement_drives__applications', filter=Q(placement_drives__applications__status='SHORTLISTED'), distinct=True),
+            selected_applications=Count('placement_drives__applications', filter=Q(placement_drives__applications__status='SELECTED'), distinct=True),
+            total_offers=Count('offers', distinct=True),
+            average_package_lpa=Avg('offers__package_lpa')
+        )
+
+        response_data = []
+        for company in companies_data:
+            avg_pkg = company.average_package_lpa
+            response_data.append({
+                "company_name": company.company_name,
+                "total_applications": company.total_applications,
+                "shortlisted_applications": company.shortlisted_applications,
+                "selected_applications": company.selected_applications,
+                "total_offers": company.total_offers,
+                "average_package_lpa": round(avg_pkg, 2) if avg_pkg is not None else 0.0
+            })
+
+        response_data.sort(key=lambda x: x['total_offers'], reverse=True)
+
+        return Response(response_data)
+
