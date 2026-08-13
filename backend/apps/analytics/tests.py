@@ -107,3 +107,99 @@ class AnalyticsAPITestCase(TestCase):
         
         self.assertEqual(data['total_students'], 0)
         self.assertEqual(data['placement_percentage'], 0.0)
+
+class DepartmentAnalyticsAPITestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('analytics-departments')
+
+        # Create users with different roles
+        self.admin_user = User.objects.create_user(email='admin@test.com', password='password', role=UserRole.ADMIN, first_name='A', last_name='A')
+        self.po_user = User.objects.create_user(email='po@test.com', password='password', role=UserRole.PLACEMENT_OFFICER, first_name='P', last_name='O')
+        self.student_user = User.objects.create_user(email='student@test.com', password='password', role=UserRole.STUDENT, first_name='S', last_name='S')
+        self.recruiter_user = User.objects.create_user(email='recruiter@test.com', password='password', role=UserRole.RECRUITER, first_name='R', last_name='R')
+
+    def test_permissions(self):
+        # 1. Admin can access department analytics.
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # 2. Placement Officer can access department analytics.
+        self.client.force_authenticate(user=self.po_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # 3. Student cannot access department analytics.
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 4. Recruiter cannot access department analytics.
+        self.client.force_authenticate(user=self.recruiter_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_department_calculations_and_ordering(self):
+        # Create data for branches
+        # CSE: 2 students, 2 placed (100%)
+        # IT: 3 students, 2 placed (66.67%)
+        # ECE: 1 student, 0 placed (0%)
+        
+        # CSE
+        u1 = User.objects.create_user(email='s1@test.com', password='password', role=UserRole.STUDENT, first_name='A', last_name='B')
+        Student.objects.create(user=u1, enrollment_number='S1', branch='CSE', year=4, semester=8, cgpa=8.5, is_placed=True)
+        u2 = User.objects.create_user(email='s2@test.com', password='password', role=UserRole.STUDENT, first_name='C', last_name='D')
+        Student.objects.create(user=u2, enrollment_number='S2', branch='CSE', year=4, semester=8, cgpa=8.5, is_placed=True)
+
+        # IT
+        u3 = User.objects.create_user(email='s3@test.com', password='password', role=UserRole.STUDENT, first_name='E', last_name='F')
+        Student.objects.create(user=u3, enrollment_number='S3', branch='IT', year=4, semester=8, cgpa=8.5, is_placed=True)
+        u4 = User.objects.create_user(email='s4@test.com', password='password', role=UserRole.STUDENT, first_name='G', last_name='H')
+        Student.objects.create(user=u4, enrollment_number='S4', branch='IT', year=4, semester=8, cgpa=8.5, is_placed=True)
+        u5 = User.objects.create_user(email='s5@test.com', password='password', role=UserRole.STUDENT, first_name='I', last_name='J')
+        Student.objects.create(user=u5, enrollment_number='S5', branch='IT', year=4, semester=8, cgpa=8.5, is_placed=False)
+
+        # ECE
+        u6 = User.objects.create_user(email='s6@test.com', password='password', role=UserRole.STUDENT, first_name='K', last_name='L')
+        Student.objects.create(user=u6, enrollment_number='S6', branch='ECE', year=4, semester=8, cgpa=8.5, is_placed=False)
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+
+        # 8. Multiple branches are returned.
+        self.assertEqual(len(data), 3)
+
+        # 10. Results are ordered by placement percentage descending.
+        self.assertEqual(data[0]['branch'], 'CSE')
+        self.assertEqual(data[1]['branch'], 'IT')
+        self.assertEqual(data[2]['branch'], 'ECE')
+
+        # 5. Students are grouped correctly by branch.
+        # 6. Placed students are counted correctly.
+        # 7. Placement percentage is calculated correctly.
+        
+        # CSE Checks
+        self.assertEqual(data[0]['total_students'], 2)
+        self.assertEqual(data[0]['placed_students'], 2)
+        self.assertEqual(data[0]['placement_percentage'], 100.0)
+
+        # IT Checks
+        self.assertEqual(data[1]['total_students'], 3)
+        self.assertEqual(data[1]['placed_students'], 2)
+        self.assertEqual(data[1]['placement_percentage'], 66.67)
+
+        # ECE Checks
+        self.assertEqual(data[2]['total_students'], 1)
+        self.assertEqual(data[2]['placed_students'], 0)
+        self.assertEqual(data[2]['placement_percentage'], 0.0)
+
+    def test_zero_students(self):
+        # 9. Zero-student/empty data is handled safely.
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertEqual(len(data), 0)

@@ -46,3 +46,31 @@ class AnalyticsOverviewView(APIView):
             "placed_students": placed_students,
             "placement_percentage": placement_percentage
         })
+
+class DepartmentAnalyticsView(APIView):
+    permission_classes = [IsAdminOrPlacementOfficer]
+
+    def get(self, request):
+        from django.db.models import Count, Q
+        
+        departments_data = Student.objects.values('branch').annotate(
+            total_students=Count('id'),
+            placed_students=Count('id', filter=Q(is_placed=True))
+        )
+
+        response_data = []
+        for dept in departments_data:
+            total = dept['total_students']
+            placed = dept['placed_students']
+            percentage = round((placed / total) * 100, 2) if total > 0 else 0.0
+
+            response_data.append({
+                "branch": dept['branch'],
+                "total_students": total,
+                "placed_students": placed,
+                "placement_percentage": percentage
+            })
+
+        response_data.sort(key=lambda x: x['placement_percentage'], reverse=True)
+
+        return Response(response_data)
