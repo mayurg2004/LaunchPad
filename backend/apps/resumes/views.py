@@ -51,3 +51,24 @@ class ResumeViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Resume.DoesNotExist:
             return Response({"detail": "No active resume found."}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def versions(self, request):
+        user = request.user
+        if user.role != UserRole.STUDENT:
+            return Response({"detail": "Only students can view resume versions."}, status=status.HTTP_403_FORBIDDEN)
+            
+        resumes = Resume.objects.filter(student__user=user).order_by('-version_number')
+        
+        # We need to return specific fields: id, title, version_number, is_active, uploaded_at
+        data = []
+        for resume in resumes:
+            data.append({
+                'id': resume.id,
+                'title': resume.title,
+                'version_number': resume.version_number,
+                'is_active': resume.is_active,
+                'uploaded_at': resume.uploaded_at
+            })
+            
+        return Response(data)

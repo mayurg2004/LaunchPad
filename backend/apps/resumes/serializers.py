@@ -4,8 +4,8 @@ from .models import Resume
 class ResumeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resume
-        fields = ['id', 'student', 'title', 'file', 'is_active', 'uploaded_at', 'updated_at']
-        read_only_fields = ['id', 'student', 'uploaded_at', 'updated_at']
+        fields = ['id', 'student', 'title', 'version_number', 'file', 'is_active', 'uploaded_at', 'updated_at']
+        read_only_fields = ['id', 'student', 'version_number', 'uploaded_at', 'updated_at']
 
     def validate_title(self, value):
         if not value.strip():

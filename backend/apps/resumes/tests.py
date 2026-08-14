@@ -168,3 +168,51 @@ class ResumeAPITests(APITestCase):
         detail_url = reverse('resume-detail', kwargs={'pk': resume.id})
         response2 = self.client.get(detail_url)
         self.assertEqual(response2.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_11_version_number_generation(self):
+        # first resume gets version 1
+        r1 = Resume.objects.create(student=self.student, title='First', file=self.generate_pdf('t1.pdf'))
+        self.assertEqual(r1.version_number, 1)
+
+        # second resume gets version 2
+        r2 = Resume.objects.create(student=self.student, title='Second', file=self.generate_pdf('t2.pdf'))
+        self.assertEqual(r2.version_number, 2)
+
+    def test_12_versions_independent_for_students(self):
+        r1 = Resume.objects.create(student=self.student, title='First S1', file=self.generate_pdf('t1.pdf'))
+        self.assertEqual(r1.version_number, 1)
+
+        r2 = Resume.objects.create(student=self.student2, title='First S2', file=self.generate_pdf('t2.pdf'))
+        self.assertEqual(r2.version_number, 1)
+
+        r3 = Resume.objects.create(student=self.student, title='Second S1', file=self.generate_pdf('t3.pdf'))
+        self.assertEqual(r3.version_number, 2)
+
+    def test_13_versions_endpoint_history(self):
+        Resume.objects.create(student=self.student, title='First', file=self.generate_pdf('t1.pdf'))
+        Resume.objects.create(student=self.student, title='Second', file=self.generate_pdf('t2.pdf'))
+        Resume.objects.create(student=self.student, title='Third', file=self.generate_pdf('t3.pdf'))
+
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-versions')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should be ordered newest version first
+        self.assertEqual(len(response.data), 3)
+        self.assertEqual(response.data[0]['version_number'], 3)
+        self.assertEqual(response.data[0]['title'], 'Third')
+        self.assertEqual(response.data[1]['version_number'], 2)
+        self.assertEqual(response.data[2]['version_number'], 1)
+
+    def test_14_versions_endpoint_isolation(self):
+        Resume.objects.create(student=self.student, title='First S1', file=self.generate_pdf('t1.pdf'))
+        Resume.objects.create(student=self.student2, title='First S2', file=self.generate_pdf('t2.pdf'))
+
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-versions')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['title'], 'First S1')
