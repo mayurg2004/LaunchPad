@@ -216,3 +216,139 @@ class ResumeAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['title'], 'First S1')
+
+    def test_15_download_own_resume(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf('mydoc.pdf'))
+        
+        self.client.force_authenticate(user=self.student_user)
+        download_url = reverse('resume-download', kwargs={'pk': resume.id})
+        response = self.client.get(download_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertIn('mydoc.pdf', response['Content-Disposition'])
+
+    def test_16_download_another_students_resume(self):
+        other_resume = Resume.objects.create(student=self.student2, title='R_other', file=self.generate_pdf('other.pdf'))
+        
+        self.client.force_authenticate(user=self.student_user)
+        download_url = reverse('resume-download', kwargs={'pk': other_resume.id})
+        response = self.client.get(download_url)
+        
+        # In ResumeViewSet, get_queryset for student filters to their own resumes, so they get 404
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_17_download_missing_resume_returns_404(self):
+        self.client.force_authenticate(user=self.student_user)
+        download_url = reverse('resume-download', kwargs={'pk': 9999})
+        response = self.client.get(download_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_18_unauthenticated_request_rejected(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        
+        download_url = reverse('resume-download', kwargs={'pk': resume.id})
+        response = self.client.get(download_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_19_analysis_can_be_linked_to_resume(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from .models import ResumeAnalysis
+        analysis = ResumeAnalysis.objects.create(
+            resume=resume,
+            score=85.5,
+            skills_found=['Python', 'Django'],
+            strengths=['Good structure'],
+            suggestions=['Add more projects']
+        )
+        self.assertEqual(ResumeAnalysis.objects.count(), 1)
+        self.assertEqual(analysis.resume, resume)
+
+    def test_20_student_can_view_own_analysis(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=85.5)
+        
+        self.client.force_authenticate(user=self.student_user)
+        analysis_url = reverse('resume-analysis', kwargs={'pk': resume.id})
+        response = self.client.get(analysis_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['score'], 85.5)
+
+    def test_21_student_cannot_view_another_students_analysis(self):
+        other_resume = Resume.objects.create(student=self.student2, title='R_other', file=self.generate_pdf())
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=other_resume, score=90.0)
+        
+        self.client.force_authenticate(user=self.student_user)
+        analysis_url = reverse('resume-analysis', kwargs={'pk': other_resume.id})
+        response = self.client.get(analysis_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_22_latest_analysis_endpoint_returns_newest(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from .models import ResumeAnalysis
+        import datetime
+        from django.utils import timezone
+        
+        analysis1 = ResumeAnalysis.objects.create(resume=resume, score=70.0)
+        ResumeAnalysis.objects.filter(id=analysis1.id).update(analyzed_at=timezone.now() - datetime.timedelta(days=1))
+        
+        ResumeAnalysis.objects.create(resume=resume, score=85.0)
+        
+        self.client.force_authenticate(user=self.student_user)
+        analysis_url = reverse('resume-analysis', kwargs={'pk': resume.id})
+        response = self.client.get(analysis_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['score'], 85.0)
+
+    def test_23_analysis_history_returns_multiple(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from .models import ResumeAnalysis
+        import datetime
+        from django.utils import timezone
+        
+        analysis1 = ResumeAnalysis.objects.create(resume=resume, score=70.0)
+        ResumeAnalysis.objects.filter(id=analysis1.id).update(analyzed_at=timezone.now() - datetime.timedelta(days=1))
+        
+        ResumeAnalysis.objects.create(resume=resume, score=85.0)
+        
+        self.client.force_authenticate(user=self.student_user)
+        analyses_url = reverse('resume-analyses', kwargs={'pk': resume.id})
+        response = self.client.get(analyses_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]['score'], 85.0)
+        self.assertEqual(response.data[1]['score'], 70.0)
+
+    def test_24_invalid_score_rejected(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from .models import ResumeAnalysis
+        from django.core.exceptions import ValidationError
+        
+        with self.assertRaises(ValidationError):
+            analysis = ResumeAnalysis(resume=resume, score=150.0)
+            analysis.full_clean()
+
+        with self.assertRaises(ValidationError):
+            analysis = ResumeAnalysis(resume=resume, score=-10.0)
+            analysis.full_clean()
+
+    def test_25_unauthenticated_users_cannot_access_analysis(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=85.5)
+        
+        analysis_url = reverse('resume-analysis', kwargs={'pk': resume.id})
+        response = self.client.get(analysis_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        
+        analyses_url = reverse('resume-analyses', kwargs={'pk': resume.id})
+        response2 = self.client.get(analyses_url)
+        self.assertEqual(response2.status_code, status.HTTP_401_UNAUTHORIZED)

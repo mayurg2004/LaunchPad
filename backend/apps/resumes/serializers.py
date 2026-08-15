@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Resume
+from .models import Resume, ResumeAnalysis
 
 class ResumeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -11,3 +11,9 @@ class ResumeSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Title must not be empty.")
         return value
+
+class ResumeAnalysisSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResumeAnalysis
+        fields = ['id', 'resume', 'score', 'skills_found', 'strengths', 'suggestions', 'analyzed_at']
+        read_only_fields = ['id', 'resume', 'analyzed_at']

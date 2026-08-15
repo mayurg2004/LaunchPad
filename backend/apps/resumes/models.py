@@ -1,6 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
 
 def validate_file_size(value):
     filesize = value.size
@@ -36,3 +36,18 @@ class Resume(models.Model):
         if self.is_active:
             Resume.objects.filter(student=self.student).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
+
+class ResumeAnalysis(models.Model):
+    resume = models.ForeignKey(Resume, on_delete=models.CASCADE, related_name='analyses')
+    score = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(100.0)])
+    skills_found = models.JSONField(default=list, blank=True)
+    strengths = models.JSONField(default=list, blank=True)
+    suggestions = models.JSONField(default=list, blank=True)
+    analyzed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-analyzed_at']
+        verbose_name_plural = 'Resume Analyses'
+
+    def __str__(self):
+        return f"Analysis for {self.resume.title} - Score: {self.score}"

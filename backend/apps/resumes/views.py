@@ -1,11 +1,12 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
+from django.http import FileResponse
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from accounts.models import UserRole
-from .models import Resume
-from .serializers import ResumeSerializer
+from .models import Resume, ResumeAnalysis
+from .serializers import ResumeSerializer, ResumeAnalysisSerializer
 from .permissions import IsResumeOwnerOrAdminOrOfficer
 
 class ResumeViewSet(viewsets.ModelViewSet):
@@ -72,3 +73,44 @@ class ResumeViewSet(viewsets.ModelViewSet):
             })
             
         return Response(data)
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        resume = self.get_object()
+        
+        if not resume.file:
+            return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+        try:
+            # We open the file here; FileResponse will close it automatically.
+            file_handle = resume.file.open('rb')
+            response = FileResponse(file_handle, content_type='application/pdf')
+            
+            import os
+            filename = os.path.basename(resume.file.name)
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        except FileNotFoundError:
+            return Response({"detail": "The physical file is missing."}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['get'])
+    def analysis(self, request, pk=None):
+        resume = self.get_object()
+        
+        # Admin or Placement Officer can view any analysis (as per IsResumeOwnerOrAdminOrOfficer)
+        # Student can only view their own, handled by the permission class and get_object()
+        
+        latest_analysis = resume.analyses.order_by('-analyzed_at').first()
+        if not latest_analysis:
+            return Response({"detail": "No analysis found for this resume."}, status=status.HTTP_404_NOT_FOUND)
+            
+        serializer = ResumeAnalysisSerializer(latest_analysis)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def analyses(self, request, pk=None):
+        resume = self.get_object()
+        
+        analyses = resume.analyses.order_by('-analyzed_at')
+        serializer = ResumeAnalysisSerializer(analyses, many=True)
+        return Response(serializer.data)
