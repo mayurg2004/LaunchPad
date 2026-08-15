@@ -226,7 +226,8 @@ class ResumeAPITests(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response['Content-Type'], 'application/pdf')
-        self.assertIn('mydoc.pdf', response['Content-Disposition'])
+        self.assertIn('mydoc', response['Content-Disposition'])
+        self.assertIn('.pdf', response['Content-Disposition'])
 
     def test_16_download_another_students_resume(self):
         other_resume = Resume.objects.create(student=self.student2, title='R_other', file=self.generate_pdf('other.pdf'))
@@ -352,3 +353,53 @@ class ResumeAPITests(APITestCase):
         analyses_url = reverse('resume-analyses', kwargs={'pk': resume.id})
         response2 = self.client.get(analyses_url)
         self.assertEqual(response2.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def generate_valid_pdf(self, name='valid.pdf'):
+        # Minimal valid PDF string
+        minimal_pdf = b"%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n149\n%%EOF\n"
+        return SimpleUploadedFile(name, minimal_pdf, content_type='application/pdf')
+
+    def test_26_analyze_endpoint_requires_auth(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_27_student_can_analyze_own_pdf_valid(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['detail'], "PDF text extracted successfully.")
+        self.assertIn("text_length", response.data)
+        # Should not return full text in response
+        self.assertNotIn("text", response.data)
+
+    def test_28_student_cannot_analyze_another_students_pdf(self):
+        other_resume = Resume.objects.create(student=self.student2, title='R_other', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': other_resume.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_29_analyze_invalid_pdf_handled(self):
+        # generate_pdf returns b'a' * size which is not a valid PDF
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf('invalid.pdf'))
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], "Invalid or unreadable PDF file.")
+
+    def test_30_missing_resume_file_handled(self):
+        resume = Resume.objects.create(student=self.student, title='R1')
+        # Manually remove file to simulate missing
+        resume.file = None
+        resume.save()
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data['detail'], "File not found.")

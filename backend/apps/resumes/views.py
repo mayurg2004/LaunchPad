@@ -114,3 +114,27 @@ class ResumeViewSet(viewsets.ModelViewSet):
         analyses = resume.analyses.order_by('-analyzed_at')
         serializer = ResumeAnalysisSerializer(analyses, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def analyze(self, request, pk=None):
+        resume = self.get_object()
+        
+        if not resume.file:
+            return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+        try:
+            from .utils import extract_text_from_pdf
+            file_handle = resume.file.open('rb')
+            text = extract_text_from_pdf(file_handle)
+            file_handle.close()
+            
+            if text is None:
+                return Response({"detail": "Invalid or unreadable PDF file."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            return Response({
+                "detail": "PDF text extracted successfully.",
+                "text_length": len(text)
+            }, status=status.HTTP_200_OK)
+            
+        except FileNotFoundError:
+            return Response({"detail": "The physical file is missing."}, status=status.HTTP_404_NOT_FOUND)
