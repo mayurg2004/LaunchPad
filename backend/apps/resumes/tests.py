@@ -1,4 +1,5 @@
 import io
+from unittest.mock import patch
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -371,9 +372,9 @@ class ResumeAPITests(APITestCase):
         url = reverse('resume-analyze', kwargs={'pk': resume.id})
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['detail'], "PDF text extracted successfully.")
-        self.assertIn("text_length", response.data)
-        # Should not return full text in response
+        self.assertIn("resume_id", response.data)
+        self.assertIn("skills_found", response.data)
+        self.assertIn("analyzed_at", response.data)
         self.assertNotIn("text", response.data)
 
     def test_28_student_cannot_analyze_another_students_pdf(self):
@@ -403,3 +404,55 @@ class ResumeAPITests(APITestCase):
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data['detail'], "File not found.")
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_31_analyze_multiple_skills_detected(self, mock_extract):
+        mock_extract.return_value = "I have experience with Python, Java, and React."
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("resume_id", response.data)
+        self.assertIn("Python", response.data['skills_found'])
+        self.assertIn("Java", response.data['skills_found'])
+        self.assertIn("React", response.data['skills_found'])
+        self.assertEqual(len(response.data['skills_found']), 3)
+        self.assertNotIn("text", response.data)
+        
+        # Check that it's stored in the database
+        from .models import ResumeAnalysis
+        analysis = ResumeAnalysis.objects.get(resume=resume)
+        self.assertEqual(analysis.score, 0.0)
+        self.assertIn("Python", analysis.skills_found)
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_32_analyze_case_insensitive_matching(self, mock_extract):
+        mock_extract.return_value = "Skilled in jAvA, HTML, css, and node.js!"
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Java", response.data['skills_found'])
+        self.assertIn("HTML", response.data['skills_found'])
+        self.assertIn("CSS", response.data['skills_found'])
+        self.assertIn("Node.js", response.data['skills_found'])
+        self.assertEqual(len(response.data['skills_found']), 4)
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_33_analyze_no_matching_skills(self, mock_extract):
+        mock_extract.return_value = "I am a very good team player who works hard."
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['skills_found'], [])
+        
+        from .models import ResumeAnalysis
+        analysis = ResumeAnalysis.objects.get(resume=resume)
+        self.assertEqual(analysis.skills_found, [])

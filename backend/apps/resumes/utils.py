@@ -31,3 +31,43 @@ def extract_text_from_pdf(file_obj):
     except Exception as e:
         logger.error(f"Unexpected error parsing PDF: {e}")
         return None
+
+import re
+
+PREDEFINED_SKILLS = [
+    "Python", "Java", "C", "C++", "JavaScript", "TypeScript",
+    "HTML", "CSS", "React", "Angular", "Node.js", "Django", "Flask",
+    "Spring Boot", "Flutter", "Dart", "SQL", "MySQL", "PostgreSQL",
+    "MongoDB", "Git", "Docker", "AWS", "Linux", "REST API", "Machine Learning"
+]
+
+def detect_skills(text):
+    """
+    Detects skills from PREDEFINED_SKILLS in the given text (case-insensitive).
+    Returns a list of detected skills.
+    """
+    if not text:
+        return []
+    
+    detected = []
+    text_lower = text.lower()
+    
+    for skill in PREDEFINED_SKILLS:
+        skill_lower = skill.lower()
+        
+        # Determine left boundary
+        if skill_lower[0].isalnum():
+            pattern = r'\b' + re.escape(skill_lower)
+        else:
+            pattern = r'(?<!\w)' + re.escape(skill_lower)
+            
+        # Determine right boundary
+        if skill_lower[-1].isalnum():
+            pattern += r'(?![a-z0-9\+\#])'
+        else:
+            pattern += r'(?!\w)'
+            
+        if re.search(pattern, text_lower):
+            detected.append(skill)
+            
+    return detected
