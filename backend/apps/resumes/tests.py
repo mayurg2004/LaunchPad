@@ -424,7 +424,7 @@ class ResumeAPITests(APITestCase):
         # Check that it's stored in the database
         from .models import ResumeAnalysis
         analysis = ResumeAnalysis.objects.get(resume=resume)
-        self.assertEqual(analysis.score, 0.0)
+        self.assertEqual(analysis.score, 29.0)
         self.assertIn("Python", analysis.skills_found)
 
     @patch('resumes.utils.extract_text_from_pdf')
@@ -456,3 +456,35 @@ class ResumeAPITests(APITestCase):
         from .models import ResumeAnalysis
         analysis = ResumeAnalysis.objects.get(resume=resume)
         self.assertEqual(analysis.skills_found, [])
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_34_analyze_comprehensive_score(self, mock_extract):
+        mock_extract.return_value = (
+            "Education and work history.\n"
+            "Skills include Java, Python, SQL, Git, AWS.\n"
+            "Contact: john.doe@email.com, +1 555 1234567\n"
+            "Check out my projects on github.com and my portfolio.\n"
+            "Achievements and Certifications are great."
+        )
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Skills: 5 * 8 = 40
+        # Sections: education, work history, skills, contact, projects, achievements, certifications (max 30)
+        # Contact: email (5) + phone (5) = 10
+        # Links: github.com (4) + portfolio (2) = 6
+        # Length: < 500 = 0
+        # Total = 40 + 30 + 10 + 6 = 86
+        self.assertEqual(response.data['score'], 86.0)
+        
+        # Test capping at 100
+        # Add length > 1000 = 10 points, and another link (linkedin = 4 points)
+        # 86 + 14 = 100.
+        mock_extract.return_value += " linkedin.com " + "A" * 1500
+        
+        url2 = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response2 = self.client.post(url2)
+        self.assertEqual(response2.data['score'], 100.0)

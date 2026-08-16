@@ -71,3 +71,59 @@ def detect_skills(text):
             detected.append(skill)
             
     return detected
+
+def calculate_resume_score(text, skills_found):
+    """
+    Calculates a basic rule-based resume score from 0 to 100.
+    """
+    if not text:
+        return 0.0
+        
+    score = 0.0
+    text_lower = text.lower()
+    
+    # 1. Technical skills (up to 40 points)
+    # 8 points per skill
+    score += min(40, len(skills_found) * 8)
+    
+    # 2. Resume sections (up to 30 points)
+    # 5 points per section
+    sections = [
+        r'\beducation\b',
+        r'\b(experience|work history|employment)\b',
+        r'\bprojects\b',
+        r'\bskills\b',
+        r'\bcertifications\b',
+        r'\b(achievements|awards)\b',
+        r'\b(contact|profile|about)\b'
+    ]
+    sections_found = 0
+    for pattern in sections:
+        if re.search(pattern, text_lower):
+            sections_found += 1
+    score += min(30, sections_found * 5)
+    
+    # 3. Contact information (up to 10 points)
+    # Email: 5 points, Phone: 5 points
+    if re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text_lower):
+        score += 5
+    if re.search(r'\+?\d[\d -]{8,12}\d', text_lower):
+        score += 5
+        
+    # 4. Links (up to 10 points)
+    if 'github.com' in text_lower or 'github' in text_lower:
+        score += 4
+    if 'linkedin.com' in text_lower or 'linkedin' in text_lower:
+        score += 4
+    if 'portfolio' in text_lower or 'http' in text_lower or 'www.' in text_lower:
+        score += 2
+        
+    # 5. Length/content quality (up to 10 points)
+    text_length = len(text)
+    if 1000 <= text_length <= 4000:
+        score += 10
+    elif 500 <= text_length < 1000 or text_length > 4000:
+        score += 5
+        
+    # Clamp between 0 and 100
+    return float(max(0, min(100, score)))

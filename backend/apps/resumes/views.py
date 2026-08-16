@@ -123,7 +123,7 @@ class ResumeViewSet(viewsets.ModelViewSet):
             return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
             
         try:
-            from .utils import extract_text_from_pdf, detect_skills
+            from .utils import extract_text_from_pdf, detect_skills, calculate_resume_score
             file_handle = resume.file.open('rb')
             text = extract_text_from_pdf(file_handle)
             file_handle.close()
@@ -132,16 +132,18 @@ class ResumeViewSet(viewsets.ModelViewSet):
                 return Response({"detail": "Invalid or unreadable PDF file."}, status=status.HTTP_400_BAD_REQUEST)
             
             skills_found = detect_skills(text)
+            score = calculate_resume_score(text, skills_found)
             
             # Create ResumeAnalysis record
             analysis = ResumeAnalysis.objects.create(
                 resume=resume,
-                score=0.0,
+                score=score,
                 skills_found=skills_found
             )
             
             return Response({
                 "resume_id": resume.id,
+                "score": analysis.score,
                 "skills_found": analysis.skills_found,
                 "analyzed_at": analysis.analyzed_at
             }, status=status.HTTP_200_OK)
