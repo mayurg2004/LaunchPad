@@ -150,3 +150,35 @@ class ResumeViewSet(viewsets.ModelViewSet):
             
         except FileNotFoundError:
             return Response({"detail": "The physical file is missing."}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['get'], url_path='skill-gap/(?P<drive_id>[^/.]+)')
+    def skill_gap(self, request, pk=None, drive_id=None):
+        resume = self.get_object()
+        
+        from .models import ResumeAnalysis
+        try:
+            analysis = ResumeAnalysis.objects.filter(resume=resume).latest('analyzed_at')
+        except ResumeAnalysis.DoesNotExist:
+            return Response({"detail": "Resume analysis not found. Please analyze the resume first."}, status=status.HTTP_404_NOT_FOUND)
+            
+        from placement_drive.models import PlacementDrive
+        try:
+            drive = PlacementDrive.objects.get(id=drive_id)
+        except PlacementDrive.DoesNotExist:
+            return Response({"detail": "Placement drive not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+        from .utils import calculate_skill_gap
+        
+        matched_skills, missing_skills, match_percentage = calculate_skill_gap(
+            resume_skills=analysis.skills_found,
+            required_skills=drive.required_skills
+        )
+        
+        return Response({
+            "resume_id": resume.id,
+            "placement_drive_id": drive.id,
+            "required_skills": drive.required_skills,
+            "matched_skills": matched_skills,
+            "missing_skills": missing_skills,
+            "match_percentage": match_percentage
+        }, status=status.HTTP_200_OK)

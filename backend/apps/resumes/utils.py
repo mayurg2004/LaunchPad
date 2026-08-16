@@ -127,3 +127,25 @@ def calculate_resume_score(text, skills_found):
         
     # Clamp between 0 and 100
     return float(max(0, min(100, score)))
+
+def calculate_skill_gap(resume_skills, required_skills):
+    """
+    Compares resume skills with required skills case-insensitively.
+    Returns matched_skills, missing_skills, and match_percentage.
+    """
+    if not required_skills:
+        return [], [], 100.0
+        
+    resume_skills_lower = {s.lower() for s in resume_skills}
+    
+    matched_skills = []
+    missing_skills = []
+    
+    for req_skill in required_skills:
+        if req_skill.lower() in resume_skills_lower:
+            matched_skills.append(req_skill)
+        else:
+            missing_skills.append(req_skill)
+            
+    match_percentage = (len(matched_skills) / len(required_skills)) * 100.0
+    return matched_skills, missing_skills, round(match_percentage, 2)

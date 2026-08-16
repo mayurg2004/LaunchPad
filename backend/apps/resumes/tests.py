@@ -488,3 +488,100 @@ class ResumeAPITests(APITestCase):
         url2 = reverse('resume-analyze', kwargs={'pk': resume.id})
         response2 = self.client.post(url2)
         self.assertEqual(response2.data['score'], 100.0)
+
+    def create_placement_drive(self, required_skills):
+        from companies.models import Company
+        from placement_drive.models import PlacementDrive
+        
+        company = Company.objects.create(company_name='C2', industry='IT', website='b.com')
+        drive = PlacementDrive.objects.create(
+            company=company, title='D1', job_role='R1', required_skills=required_skills
+        )
+        return drive
+
+    def test_35_skill_gap_all_skills_matched(self):
+        resume = Resume.objects.create(student=self.student, title='R1')
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["Python", "Django", "SQL"])
+        
+        drive = self.create_placement_drive(["Python", "Django"])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-skill-gap', kwargs={'pk': resume.id, 'drive_id': drive.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['match_percentage'], 100.0)
+        self.assertEqual(len(response.data['matched_skills']), 2)
+        self.assertEqual(len(response.data['missing_skills']), 0)
+        
+    def test_36_skill_gap_some_skills_matched(self):
+        resume = Resume.objects.create(student=self.student, title='R1')
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["Python", "SQL"])
+        
+        drive = self.create_placement_drive(["Python", "Django", "React"])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-skill-gap', kwargs={'pk': resume.id, 'drive_id': drive.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Match percentage = (1 / 3) * 100 = 33.33
+        self.assertEqual(response.data['match_percentage'], 33.33)
+        self.assertEqual(response.data['matched_skills'], ["Python"])
+        self.assertEqual(response.data['missing_skills'], ["Django", "React"])
+
+    def test_37_skill_gap_case_insensitive_matching(self):
+        resume = Resume.objects.create(student=self.student, title='R1')
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["python", "REACT"])
+        
+        drive = self.create_placement_drive(["PYTHON", "react"])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-skill-gap', kwargs={'pk': resume.id, 'drive_id': drive.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['match_percentage'], 100.0)
+        self.assertIn("PYTHON", response.data['matched_skills'])
+        self.assertIn("react", response.data['matched_skills'])
+
+    def test_38_skill_gap_no_required_skills(self):
+        resume = Resume.objects.create(student=self.student, title='R1')
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["Python"])
+        
+        drive = self.create_placement_drive([])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-skill-gap', kwargs={'pk': resume.id, 'drive_id': drive.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['match_percentage'], 100.0)
+
+    def test_39_skill_gap_unauthorized_and_invalid_drive(self):
+        # Invalid drive
+        resume = Resume.objects.create(student=self.student, title='R1')
+        from .models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=[])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-skill-gap', kwargs={'pk': resume.id, 'drive_id': 999})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        
+        # Unauthorized access to another student's resume
+        drive = self.create_placement_drive(["Java"])
+        other_resume = Resume.objects.create(student=self.student2, title='R2')
+        url2 = reverse('resume-skill-gap', kwargs={'pk': other_resume.id, 'drive_id': drive.id})
+        response2 = self.client.get(url2)
+        self.assertEqual(response2.status_code, status.HTTP_404_NOT_FOUND)
+        
+        # Missing resume analysis
+        no_analysis_resume = Resume.objects.create(student=self.student, title='R3')
+        url3 = reverse('resume-skill-gap', kwargs={'pk': no_analysis_resume.id, 'drive_id': drive.id})
+        response3 = self.client.get(url3)
+        self.assertEqual(response3.status_code, status.HTTP_404_NOT_FOUND)
