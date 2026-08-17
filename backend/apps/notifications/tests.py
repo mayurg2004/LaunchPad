@@ -2,7 +2,7 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 from accounts.models import User, UserRole
-from .models import Notification
+from notifications.models import Notification
 
 class NotificationAPITest(TestCase):
     def setUp(self):
@@ -233,7 +233,7 @@ class NotificationTriggersTest(TestCase):
             recipient=self.user, title="New Offer Received", notification_type="OFFER"
         ).exists())
 
-from .models import NotificationPreference
+from notifications.models import NotificationPreference
 
 class NotificationPreferenceTest(TestCase):
     def setUp(self):

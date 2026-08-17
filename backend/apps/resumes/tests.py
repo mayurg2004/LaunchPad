@@ -6,7 +6,7 @@ from rest_framework import status
 from django.core.files.uploadedfile import SimpleUploadedFile
 from accounts.models import User, UserRole
 from students.models import Student
-from .models import Resume
+from resumes.models import Resume
 
 class ResumeAPITests(APITestCase):
     def setUp(self):
@@ -257,7 +257,7 @@ class ResumeAPITests(APITestCase):
 
     def test_19_analysis_can_be_linked_to_resume(self):
         resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         analysis = ResumeAnalysis.objects.create(
             resume=resume,
             score=85.5,
@@ -270,7 +270,7 @@ class ResumeAPITests(APITestCase):
 
     def test_20_student_can_view_own_analysis(self):
         resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=resume, score=85.5)
         
         self.client.force_authenticate(user=self.student_user)
@@ -282,7 +282,7 @@ class ResumeAPITests(APITestCase):
 
     def test_21_student_cannot_view_another_students_analysis(self):
         other_resume = Resume.objects.create(student=self.student2, title='R_other', file=self.generate_pdf())
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=other_resume, score=90.0)
         
         self.client.force_authenticate(user=self.student_user)
@@ -293,7 +293,7 @@ class ResumeAPITests(APITestCase):
 
     def test_22_latest_analysis_endpoint_returns_newest(self):
         resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         import datetime
         from django.utils import timezone
         
@@ -311,7 +311,7 @@ class ResumeAPITests(APITestCase):
 
     def test_23_analysis_history_returns_multiple(self):
         resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         import datetime
         from django.utils import timezone
         
@@ -331,7 +331,7 @@ class ResumeAPITests(APITestCase):
 
     def test_24_invalid_score_rejected(self):
         resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         from django.core.exceptions import ValidationError
         
         with self.assertRaises(ValidationError):
@@ -344,7 +344,7 @@ class ResumeAPITests(APITestCase):
 
     def test_25_unauthenticated_users_cannot_access_analysis(self):
         resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=resume, score=85.5)
         
         analysis_url = reverse('resume-analysis', kwargs={'pk': resume.id})
@@ -422,7 +422,7 @@ class ResumeAPITests(APITestCase):
         self.assertNotIn("text", response.data)
         
         # Check that it's stored in the database
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         analysis = ResumeAnalysis.objects.get(resume=resume)
         self.assertEqual(analysis.score, 29.0)
         self.assertIn("Python", analysis.skills_found)
@@ -453,7 +453,7 @@ class ResumeAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['skills_found'], [])
         
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         analysis = ResumeAnalysis.objects.get(resume=resume)
         self.assertEqual(analysis.skills_found, [])
 
@@ -501,7 +501,7 @@ class ResumeAPITests(APITestCase):
 
     def test_35_skill_gap_all_skills_matched(self):
         resume = Resume.objects.create(student=self.student, title='R1')
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["Python", "Django", "SQL"])
         
         drive = self.create_placement_drive(["Python", "Django"])
@@ -517,7 +517,7 @@ class ResumeAPITests(APITestCase):
         
     def test_36_skill_gap_some_skills_matched(self):
         resume = Resume.objects.create(student=self.student, title='R1')
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["Python", "SQL"])
         
         drive = self.create_placement_drive(["Python", "Django", "React"])
@@ -534,7 +534,7 @@ class ResumeAPITests(APITestCase):
 
     def test_37_skill_gap_case_insensitive_matching(self):
         resume = Resume.objects.create(student=self.student, title='R1')
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["python", "REACT"])
         
         drive = self.create_placement_drive(["PYTHON", "react"])
@@ -550,7 +550,7 @@ class ResumeAPITests(APITestCase):
 
     def test_38_skill_gap_no_required_skills(self):
         resume = Resume.objects.create(student=self.student, title='R1')
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=["Python"])
         
         drive = self.create_placement_drive([])
@@ -565,7 +565,7 @@ class ResumeAPITests(APITestCase):
     def test_39_skill_gap_unauthorized_and_invalid_drive(self):
         # Invalid drive
         resume = Resume.objects.create(student=self.student, title='R1')
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         ResumeAnalysis.objects.create(resume=resume, score=50.0, skills_found=[])
         
         self.client.force_authenticate(user=self.student_user)
@@ -585,3 +585,94 @@ class ResumeAPITests(APITestCase):
         url3 = reverse('resume-skill-gap', kwargs={'pk': no_analysis_resume.id, 'drive_id': drive.id})
         response3 = self.client.get(url3)
         self.assertEqual(response3.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_40_analyze_generates_suggestions_for_missing_sections(self, mock_extract):
+        mock_extract.return_value = "Just some text with no sections."
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        suggestions = response.data['suggestions']
+        self.assertIn("Consider adding an education section to highlight your academic background.", suggestions)
+        self.assertIn("Consider adding 2-3 relevant academic or personal projects.", suggestions)
+        self.assertIn("Consider adding a professional email address.", suggestions)
+        self.assertIn("Consider adding your GitHub or LinkedIn profile.", suggestions)
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_41_analyze_does_not_generate_missing_for_existing_sections(self, mock_extract):
+        mock_extract.return_value = (
+            "Education section here.\n"
+            "Experience and Work history.\n"
+            "Projects are listed.\n"
+            "Certifications are included.\n"
+            "Skills: Java, Python.\n"
+            "Contact: test@email.com, +1 555 1234567\n"
+            "Links: github.com\n"
+            "Achievements section."
+        )
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        suggestions = response.data['suggestions']
+        self.assertNotIn("Consider adding an education section to highlight your academic background.", suggestions)
+        self.assertNotIn("Consider adding 2-3 relevant academic or personal projects.", suggestions)
+        self.assertNotIn("Consider adding a professional email address.", suggestions)
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_42_analyze_generates_strengths_correctly(self, mock_extract):
+        mock_extract.return_value = (
+            "Projects are listed.\n"
+            "Certifications are included.\n"
+            "Skills: Python, Java, React, SQL, AWS.\n"
+            "Links: github.com"
+        )
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        strengths = response.data['strengths']
+        self.assertIn("Good project section.", strengths)
+        self.assertIn("Multiple relevant certifications.", strengths)
+        self.assertIn("GitHub profile available.", strengths)
+        self.assertIn("Strong technical skill coverage.", strengths)
+
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_43_suggestions_are_stored_in_resume_analysis(self, mock_extract):
+        mock_extract.return_value = "Empty."
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        self.client.post(url)
+        
+        from .models import ResumeAnalysis
+        analysis = ResumeAnalysis.objects.get(resume=resume)
+        self.assertTrue(len(analysis.suggestions) > 0)
+        self.assertIn("Consider adding an education section to highlight your academic background.", analysis.suggestions)
+        
+    @patch('resumes.utils.extract_text_from_pdf')
+    def test_44_verify_existing_functionality_works_with_feedback(self, mock_extract):
+        mock_extract.return_value = "Python, Java, Git"
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_valid_pdf())
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analyze', kwargs={'pk': resume.id})
+        response = self.client.post(url)
+        
+        # Test old functionality
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Python", response.data['skills_found'])
+        self.assertIn("Java", response.data['skills_found'])
+        self.assertIn("Git", response.data['skills_found'])
+        self.assertTrue(response.data['score'] > 0)
+        
+        # Test new fields are present
+        self.assertIn("strengths", response.data)
+        self.assertIn("suggestions", response.data)
+

@@ -149,3 +149,86 @@ def calculate_skill_gap(resume_skills, required_skills):
             
     match_percentage = (len(matched_skills) / len(required_skills)) * 100.0
     return matched_skills, missing_skills, round(match_percentage, 2)
+
+def generate_resume_feedback(text, skills_found):
+    """
+    Analyzes resume text and generates rule-based strengths and suggestions.
+    Does not use AI APIs.
+    """
+    strengths = []
+    suggestions = []
+    
+    if not text:
+        suggestions.append("The resume appears to be empty or unreadable.")
+        return strengths, suggestions
+        
+    text_lower = text.lower()
+    
+    # 1. Check sections
+    sections = {
+        'education': {
+            'pattern': r'\beducation\b',
+            'missing': "Consider adding an education section to highlight your academic background."
+        },
+        'experience': {
+            'pattern': r'\b(experience|work history|employment)\b',
+            'missing': "Consider adding an experience or work history section.",
+            'present': "Professional experience included."
+        },
+        'projects': {
+            'pattern': r'\bprojects\b',
+            'missing': "Consider adding 2-3 relevant academic or personal projects.",
+            'present': "Good project section."
+        },
+        'skills': {
+            'pattern': r'\bskills\b',
+            'missing': "Consider adding a dedicated skills section to highlight your technical abilities."
+        },
+        'certifications': {
+            'pattern': r'\bcertifications\b',
+            'missing': "Consider adding relevant certifications or courses.",
+            'present': "Multiple relevant certifications."
+        },
+        'achievements': {
+            'pattern': r'\b(achievements|awards)\b',
+            'missing': "Consider adding an achievements or awards section to stand out."
+        },
+        'contact': {
+            'pattern': r'\b(contact|profile|about)\b',
+            'missing': "Consider adding a contact or profile section with your details."
+        }
+    }
+    
+    for key, data in sections.items():
+        if re.search(data['pattern'], text_lower):
+            if 'present' in data:
+                strengths.append(data['present'])
+        else:
+            suggestions.append(data['missing'])
+            
+    # 2. Check contact details
+    if not re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text_lower):
+        suggestions.append("Consider adding a professional email address.")
+        
+    if not re.search(r'\+?\d[\d -]{8,12}\d', text_lower):
+        suggestions.append("Consider adding a contact phone number.")
+        
+    # 3. Check links
+    has_github = 'github.com' in text_lower or 'github' in text_lower
+    has_linkedin = 'linkedin.com' in text_lower or 'linkedin' in text_lower
+    
+    if has_github:
+        strengths.append("GitHub profile available.")
+    if has_linkedin:
+        strengths.append("LinkedIn profile available.")
+        
+    if not has_github and not has_linkedin:
+        suggestions.append("Consider adding your GitHub or LinkedIn profile.")
+        
+    # 4. Check skills
+    if len(skills_found) >= 4:
+        strengths.append("Strong technical skill coverage.")
+    elif len(skills_found) == 0:
+        suggestions.append("Consider mentioning specific technical skills (e.g., Python, React, SQL).")
+        
+    return strengths, suggestions
