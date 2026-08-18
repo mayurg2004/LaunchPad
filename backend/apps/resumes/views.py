@@ -107,13 +107,49 @@ class ResumeViewSet(viewsets.ModelViewSet):
         serializer = ResumeAnalysisSerializer(latest_analysis)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['get'])
-    def analyses(self, request, pk=None):
+    @action(detail=True, methods=['get'], url_path='analysis/history')
+    def analysis_history(self, request, pk=None):
         resume = self.get_object()
-        
         analyses = resume.analyses.order_by('-analyzed_at')
         serializer = ResumeAnalysisSerializer(analyses, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='analysis/progress')
+    def analysis_progress(self, request, pk=None):
+        resume = self.get_object()
+        
+        analyses = list(resume.analyses.order_by('-analyzed_at')[:2])
+        
+        if not analyses:
+            return Response({"detail": "No analysis found for this resume."}, status=status.HTTP_404_NOT_FOUND)
+            
+        current_analysis = analyses[0]
+        
+        if len(analyses) == 1:
+            return Response({
+                "current_score": current_analysis.score,
+                "previous_score": None,
+                "score_change": 0.0,
+                "new_skills": current_analysis.skills_found,
+                "removed_skills": []
+            })
+            
+        previous_analysis = analyses[1]
+        score_change = round(current_analysis.score - previous_analysis.score, 2)
+        
+        current_skills_lower = {s.lower() for s in current_analysis.skills_found}
+        previous_skills_lower = {s.lower() for s in previous_analysis.skills_found}
+        
+        new_skills = [s for s in current_analysis.skills_found if s.lower() not in previous_skills_lower]
+        removed_skills = [s for s in previous_analysis.skills_found if s.lower() not in current_skills_lower]
+        
+        return Response({
+            "current_score": current_analysis.score,
+            "previous_score": previous_analysis.score,
+            "score_change": score_change,
+            "new_skills": new_skills,
+            "removed_skills": removed_skills
+        })
 
     @action(detail=True, methods=['post'])
     def analyze(self, request, pk=None):

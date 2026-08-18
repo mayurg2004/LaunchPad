@@ -321,7 +321,7 @@ class ResumeAPITests(APITestCase):
         ResumeAnalysis.objects.create(resume=resume, score=85.0)
         
         self.client.force_authenticate(user=self.student_user)
-        analyses_url = reverse('resume-analyses', kwargs={'pk': resume.id})
+        analyses_url = reverse('resume-analysis-history', kwargs={'pk': resume.id})
         response = self.client.get(analyses_url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -351,7 +351,7 @@ class ResumeAPITests(APITestCase):
         response = self.client.get(analysis_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         
-        analyses_url = reverse('resume-analyses', kwargs={'pk': resume.id})
+        analyses_url = reverse('resume-analysis-history', kwargs={'pk': resume.id})
         response2 = self.client.get(analyses_url)
         self.assertEqual(response2.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -652,7 +652,7 @@ class ResumeAPITests(APITestCase):
         url = reverse('resume-analyze', kwargs={'pk': resume.id})
         self.client.post(url)
         
-        from .models import ResumeAnalysis
+        from resumes.models import ResumeAnalysis
         analysis = ResumeAnalysis.objects.get(resume=resume)
         self.assertTrue(len(analysis.suggestions) > 0)
         self.assertIn("Consider adding an education section to highlight your academic background.", analysis.suggestions)
@@ -676,3 +676,110 @@ class ResumeAPITests(APITestCase):
         self.assertIn("strengths", response.data)
         self.assertIn("suggestions", response.data)
 
+    def test_45_analysis_history_endpoint(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from resumes.models import ResumeAnalysis
+        import datetime
+        from django.utils import timezone
+        
+        analysis1 = ResumeAnalysis.objects.create(resume=resume, score=50.0)
+        ResumeAnalysis.objects.filter(id=analysis1.id).update(analyzed_at=timezone.now() - datetime.timedelta(days=1))
+        
+        analysis2 = ResumeAnalysis.objects.create(resume=resume, score=80.0)
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analysis-history', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        # Should be newest first
+        self.assertEqual(response.data[0]['score'], 80.0)
+        self.assertEqual(response.data[1]['score'], 50.0)
+
+    def test_46_analysis_progress_multiple_analyses(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from resumes.models import ResumeAnalysis
+        import datetime
+        from django.utils import timezone
+        
+        # Previous analysis
+        analysis1 = ResumeAnalysis.objects.create(resume=resume, score=60.0, skills_found=['Python', 'Django', 'Git'])
+        ResumeAnalysis.objects.filter(id=analysis1.id).update(analyzed_at=timezone.now() - datetime.timedelta(days=1))
+        
+        # Current analysis
+        analysis2 = ResumeAnalysis.objects.create(resume=resume, score=75.5, skills_found=['Python', 'Django', 'React', 'Docker'])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analysis-progress', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['current_score'], 75.5)
+        self.assertEqual(response.data['previous_score'], 60.0)
+        self.assertEqual(response.data['score_change'], 15.5)
+        
+        self.assertCountEqual(response.data['new_skills'], ['React', 'Docker'])
+        self.assertCountEqual(response.data['removed_skills'], ['Git'])
+
+    def test_47_analysis_progress_single_analysis(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from resumes.models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=60.0, skills_found=['Python', 'Django'])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analysis-progress', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['current_score'], 60.0)
+        self.assertIsNone(response.data['previous_score'])
+        self.assertEqual(response.data['score_change'], 0.0)
+        self.assertCountEqual(response.data['new_skills'], ['Python', 'Django'])
+        self.assertEqual(response.data['removed_skills'], [])
+
+    def test_48_analysis_progress_no_analysis(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analysis-progress', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_49_analysis_progress_unauthorized_access(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from resumes.models import ResumeAnalysis
+        ResumeAnalysis.objects.create(resume=resume, score=60.0)
+        
+        # User is not authenticated
+        url = reverse('resume-analysis-progress', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        
+        # Student 2 tries to access Student 1's progress
+        self.client.force_authenticate(user=self.student_user2)
+        response2 = self.client.get(url)
+        self.assertEqual(response2.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_50_analysis_progress_case_insensitive_skills(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        from resumes.models import ResumeAnalysis
+        import datetime
+        from django.utils import timezone
+        
+        # Previous analysis
+        analysis1 = ResumeAnalysis.objects.create(resume=resume, score=60.0, skills_found=['python', 'DJANGO'])
+        ResumeAnalysis.objects.filter(id=analysis1.id).update(analyzed_at=timezone.now() - datetime.timedelta(days=1))
+        
+        # Current analysis
+        analysis2 = ResumeAnalysis.objects.create(resume=resume, score=75.5, skills_found=['Python', 'Django', 'React'])
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analysis-progress', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Python and Django should not be considered new or removed just because of case
+        self.assertCountEqual(response.data['new_skills'], ['React'])
+        self.assertEqual(response.data['removed_skills'], [])
