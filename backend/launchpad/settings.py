@@ -181,3 +181,8 @@ CORS_ALLOW_ALL_ORIGINS = True # Allow all origins for development
 
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
+
+# AI Configuration
+AI_PROVIDER = env('AI_PROVIDER', default='mock')
+AI_API_KEY = env('AI_API_KEY', default='')
+AI_MODEL_NAME = env('AI_MODEL_NAME', default='')
