@@ -114,6 +114,23 @@ class ResumeViewSet(viewsets.ModelViewSet):
         serializer = ResumeAnalysisSerializer(analyses, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'], url_path='analysis/summary')
+    def analysis_summary(self, request, pk=None):
+        resume = self.get_object()
+        
+        latest_analysis = resume.analyses.order_by('-analyzed_at').first()
+        if not latest_analysis:
+            return Response({"detail": "No analysis found for this resume."}, status=status.HTTP_404_NOT_FOUND)
+            
+        return Response({
+            "resume_id": resume.id,
+            "score": latest_analysis.score,
+            "skills_count": len(latest_analysis.skills_found),
+            "strengths_count": len(latest_analysis.strengths),
+            "suggestions_count": len(latest_analysis.suggestions),
+            "analyzed_at": latest_analysis.analyzed_at
+        })
+
     @action(detail=True, methods=['get'], url_path='analysis/progress')
     def analysis_progress(self, request, pk=None):
         resume = self.get_object()

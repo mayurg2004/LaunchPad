@@ -154,3 +154,45 @@ class ResumeAIAnalyzeTests(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Invalid or unreadable PDF file", response.data['detail'])
+
+    def test_analysis_summary_success(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        analysis = ResumeAnalysis.objects.create(
+            resume=resume,
+            score=90.0,
+            skills_found=['Python', 'Django'],
+            strengths=['Good'],
+            suggestions=['Add this', 'And this']
+        )
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analysis-summary', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['resume_id'], resume.id)
+        self.assertEqual(response.data['score'], 90.0)
+        self.assertEqual(response.data['skills_count'], 2)
+        self.assertEqual(response.data['strengths_count'], 1)
+        self.assertEqual(response.data['suggestions_count'], 2)
+        self.assertIn('analyzed_at', response.data)
+
+    def test_analysis_summary_unauthorized_access(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        ResumeAnalysis.objects.create(resume=resume, score=90.0)
+        
+        self.client.force_authenticate(user=self.student_user2)
+        url = reverse('resume-analysis-summary', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_analysis_summary_no_analysis(self):
+        resume = Resume.objects.create(student=self.student, title='R1', file=self.generate_pdf())
+        
+        self.client.force_authenticate(user=self.student_user)
+        url = reverse('resume-analysis-summary', kwargs={'pk': resume.id})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data['detail'], "No analysis found for this resume.")
