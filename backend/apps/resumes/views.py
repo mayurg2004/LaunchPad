@@ -192,6 +192,59 @@ class ResumeViewSet(viewsets.ModelViewSet):
         except FileNotFoundError:
             return Response({"detail": "The physical file is missing."}, status=status.HTTP_404_NOT_FOUND)
 
+    @action(detail=True, methods=['post'], url_path='ai-analyze')
+    def ai_analyze(self, request, pk=None):
+        resume = self.get_object()
+        
+        if not resume.file:
+            return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+        try:
+            from .utils import extract_text_from_pdf
+            file_handle = resume.file.open('rb')
+            text = extract_text_from_pdf(file_handle)
+            file_handle.close()
+            
+            if not text or not text.strip():
+                return Response({"detail": "Invalid or unreadable PDF file."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            from ai.services import AIService
+            ai_service = AIService()
+            
+            try:
+                ai_response = ai_service.analyze_resume(text)
+            except ValueError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({"detail": "AI Provider Error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            score = ai_response.get('score', 0)
+            if not isinstance(score, (int, float)) or not (0 <= score <= 100):
+                return Response({"detail": "Invalid AI response: score must be between 0 and 100."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            # Create ResumeAnalysis record
+            analysis = ResumeAnalysis.objects.create(
+                resume=resume,
+                score=score,
+                skills_found=ai_response.get('skills_found', []),
+                strengths=ai_response.get('strengths', []),
+                weaknesses=ai_response.get('weaknesses', []),
+                suggestions=ai_response.get('suggestions', [])
+            )
+            
+            return Response({
+                "resume_id": resume.id,
+                "score": analysis.score,
+                "skills_found": analysis.skills_found,
+                "strengths": analysis.strengths,
+                "weaknesses": analysis.weaknesses,
+                "suggestions": analysis.suggestions,
+                "analyzed_at": analysis.analyzed_at
+            }, status=status.HTTP_200_OK)
+            
+        except FileNotFoundError:
+            return Response({"detail": "The physical file is missing."}, status=status.HTTP_404_NOT_FOUND)
+
     @action(detail=True, methods=['get'], url_path='skill-gap/(?P<drive_id>[^/.]+)')
     def skill_gap(self, request, pk=None, drive_id=None):
         resume = self.get_object()

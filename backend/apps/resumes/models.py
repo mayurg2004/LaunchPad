@@ -42,6 +42,7 @@ class ResumeAnalysis(models.Model):
     score = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(100.0)])
     skills_found = models.JSONField(default=list, blank=True)
     strengths = models.JSONField(default=list, blank=True)
+    weaknesses = models.JSONField(default=list, blank=True)
     suggestions = models.JSONField(default=list, blank=True)
     analyzed_at = models.DateTimeField(auto_now_add=True)
 

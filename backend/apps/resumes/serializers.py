@@ -15,5 +15,5 @@ class ResumeSerializer(serializers.ModelSerializer):
 class ResumeAnalysisSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResumeAnalysis
-        fields = ['id', 'resume', 'score', 'skills_found', 'strengths', 'suggestions', 'analyzed_at']
+        fields = ['id', 'resume', 'score', 'skills_found', 'strengths', 'weaknesses', 'suggestions', 'analyzed_at']
         read_only_fields = ['id', 'resume', 'analyzed_at']
