@@ -150,3 +150,126 @@ class CareerRecommendationTests(APITestCase):
         response = self.client.get(self.list_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 0)
+
+from resumes.models import Resume, ResumeAnalysis
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+class CareerRecommendationGenerationTests(APITestCase):
+    def setUp(self):
+        # Create student 1
+        self.user1 = User.objects.create_user(email='gen_student1@test.com', password='password123', first_name='Student', last_name='Gen', role=UserRole.STUDENT)
+        self.student1 = Student.objects.create(user=self.user1, enrollment_number='GEN1', branch='CS', year=3, semester=5, cgpa=8.0)
+        
+        self.generate_url = reverse('career-recommendation-generate')
+
+    def _create_resume_with_skills(self, student, skills):
+        dummy_file = SimpleUploadedFile("resume.pdf", b"file_content", content_type="application/pdf")
+        resume = Resume.objects.create(student=student, title="Resume", file=dummy_file, is_active=True)
+        ResumeAnalysis.objects.create(resume=resume, score=80.0, skills_found=skills)
+        return resume
+
+    def test_backend_developer_recommendation(self):
+        """Test Backend Developer recommendation."""
+        self._create_resume_with_skills(self.student1, ["Python", "Django", "SQL", "Git"])
+        
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # Should match Backend Developer 100%, and Machine Learning Engineer 50%
+        # Let's find backend dev in response
+        backend_rec = next((r for r in response.data if r['recommended_role'] == 'Backend Developer'), None)
+        self.assertIsNotNone(backend_rec)
+        self.assertEqual(backend_rec['match_score'], 100.0)
+        self.assertEqual(len(backend_rec['missing_skills']), 0)
+
+    def test_frontend_developer_recommendation(self):
+        """Test Frontend Developer recommendation."""
+        self._create_resume_with_skills(self.student1, ["JavaScript", "React", "HTML", "CSS"])
+        
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        frontend_rec = next((r for r in response.data if r['recommended_role'] == 'Frontend Developer'), None)
+        self.assertIsNotNone(frontend_rec)
+        self.assertEqual(frontend_rec['match_score'], 100.0)
+
+    def test_flutter_developer_recommendation(self):
+        """Test Flutter Developer recommendation."""
+        self._create_resume_with_skills(self.student1, ["Flutter", "Dart"])
+        
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        flutter_rec = next((r for r in response.data if r['recommended_role'] == 'Flutter Developer'), None)
+        self.assertIsNotNone(flutter_rec)
+        self.assertEqual(flutter_rec['match_score'], 100.0)
+
+    def test_devops_recommendation(self):
+        """Test DevOps Engineer recommendation."""
+        self._create_resume_with_skills(self.student1, ["Docker", "AWS", "Linux"])
+        
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        devops_rec = next((r for r in response.data if r['recommended_role'] == 'DevOps Engineer'), None)
+        self.assertIsNotNone(devops_rec)
+        self.assertEqual(devops_rec['match_score'], 100.0)
+
+    def test_machine_learning_recommendation(self):
+        """Test Machine Learning Engineer recommendation."""
+        self._create_resume_with_skills(self.student1, ["Python", "Machine Learning"])
+        
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        ml_rec = next((r for r in response.data if r['recommended_role'] == 'Machine Learning Engineer'), None)
+        self.assertIsNotNone(ml_rec)
+        self.assertEqual(ml_rec['match_score'], 100.0)
+
+    def test_missing_skills_and_match_score(self):
+        """Test missing skills and match score calculation."""
+        # Backend needs Python, Django, SQL (3 skills)
+        # Providing only Python (1 skill) -> score should be 33.33%
+        self._create_resume_with_skills(self.student1, ["Python", "Git"])
+        
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        backend_rec = next((r for r in response.data if r['recommended_role'] == 'Backend Developer'), None)
+        self.assertIsNotNone(backend_rec)
+        self.assertAlmostEqual(backend_rec['match_score'], 33.33, places=2)
+        self.assertIn("Django", backend_rec['missing_skills'])
+        self.assertIn("SQL", backend_rec['missing_skills'])
+
+    def test_student_without_resume(self):
+        """Test generating recommendation when student has no active resume."""
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], "No active resume found.")
+
+    def test_student_without_resume_analysis(self):
+        """Test generating recommendation when student has resume but no analysis."""
+        dummy_file = SimpleUploadedFile("resume.pdf", b"file_content", content_type="application/pdf")
+        Resume.objects.create(student=self.student1, title="Resume", file=dummy_file, is_active=True)
+        
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.generate_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], "No resume analysis found. Please analyze your resume first.")
+
+    def test_unauthorized_access(self):
+        """Test that non-students (e.g. recruiters) cannot generate recommendations."""
+        admin_user = User.objects.create_user(email='admin_gen@test.com', password='password', role=UserRole.ADMIN)
+        self.client.force_authenticate(user=admin_user)
+        
+        response = self.client.post(self.generate_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
