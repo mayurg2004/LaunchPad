@@ -41,6 +41,20 @@ class RecentActivityView(APIView):
         activities = DashboardService.get_recent_activity(limit=50)
         return Response({"activities": activities}, status=status.HTTP_200_OK)
 
+class PackageStatisticsView(APIView):
+    permission_classes = [IsAdminOrPlacementOfficer]
+
+    def get(self, request):
+        stats = DashboardService.get_package_statistics()
+        return Response(stats, status=status.HTTP_200_OK)
+
+class DriveStatisticsView(APIView):
+    permission_classes = [IsAdminOrPlacementOfficer]
+
+    def get(self, request):
+        stats = DashboardService.get_drive_statistics()
+        return Response(stats, status=status.HTTP_200_OK)
+
 class AnalyticsOverviewView(APIView):
     permission_classes = [IsAdminOrPlacementOfficer]
 

@@ -74,3 +74,49 @@ class DashboardService:
             
         activities.sort(key=lambda x: x["timestamp"], reverse=True)
         return activities[:limit]
+
+    @staticmethod
+    def get_package_statistics():
+        from django.db.models import Avg, Max, Min
+        
+        offers = Offer.objects.all()
+        total_offers = offers.count()
+        
+        stats = offers.aggregate(
+            avg_pkg=Avg('package_lpa'),
+            max_pkg=Max('package_lpa'),
+            min_pkg=Min('package_lpa')
+        )
+        
+        return {
+            "total_offers": total_offers,
+            "average_package_lpa": round(stats['avg_pkg'], 2) if stats['avg_pkg'] is not None else 0.0,
+            "highest_package_lpa": float(stats['max_pkg']) if stats['max_pkg'] is not None else 0.0,
+            "lowest_package_lpa": float(stats['min_pkg']) if stats['min_pkg'] is not None else 0.0
+        }
+
+    @staticmethod
+    def get_drive_statistics():
+        from django.db.models import Count
+        
+        total_drives = PlacementDrive.objects.count()
+        open_drives = PlacementDrive.objects.filter(status='OPEN').count()
+        closed_drives = PlacementDrive.objects.filter(status='CLOSED').count()
+        completed_drives = PlacementDrive.objects.filter(status='COMPLETED').count()
+        cancelled_drives = PlacementDrive.objects.filter(status='CANCELLED').count()
+        
+        total_applications = Application.objects.count()
+        
+        avg_apps = 0.0
+        if total_drives > 0:
+            avg_apps = round(total_applications / total_drives, 2)
+            
+        return {
+            "total_drives": total_drives,
+            "open_drives": open_drives,
+            "closed_drives": closed_drives,
+            "completed_drives": completed_drives,
+            "cancelled_drives": cancelled_drives,
+            "total_applications": total_applications,
+            "average_applications_per_drive": avg_apps
+        }

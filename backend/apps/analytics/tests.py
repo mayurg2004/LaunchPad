@@ -414,3 +414,125 @@ class RecentActivityAPITestCase(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['activities'], [])
+
+class PackageStatisticsAPITestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('dashboard-package-statistics')
+
+        self.admin_user = User.objects.create_user(email='admin_pkg@test.com', password='password', role=UserRole.ADMIN, first_name='A', last_name='A')
+        self.po_user = User.objects.create_user(email='po_pkg@test.com', password='password', role=UserRole.PLACEMENT_OFFICER, first_name='P', last_name='O')
+        self.student_user = User.objects.create_user(email='student_pkg@test.com', password='password', role=UserRole.STUDENT, first_name='S', last_name='S')
+        self.recruiter_user = User.objects.create_user(email='recruiter_pkg@test.com', password='password', role=UserRole.RECRUITER, first_name='R', last_name='R')
+
+    def test_permissions(self):
+        self.client.force_authenticate(user=self.admin_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.po_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.student_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.recruiter_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_package_statistics_calculations(self):
+        s1 = Student.objects.create(user=self.student_user, enrollment_number='PKG1', branch='CSE', year=4, semester=8, cgpa=8.5)
+        c1 = Company.objects.create(company_name='Company A')
+        pd1 = PlacementDrive.objects.create(company=c1, title='Software Engineer', job_role='SDE', status='OPEN')
+        a1 = Application.objects.create(student=s1, placement_drive=pd1)
+
+        u2 = User.objects.create_user(email='student_pkg2@test.com', password='password', role=UserRole.STUDENT)
+        s2 = Student.objects.create(user=u2, enrollment_number='PKG2', branch='ECE', year=4, semester=8, cgpa=8.5)
+        a2 = Application.objects.create(student=s2, placement_drive=pd1)
+        
+        u3 = User.objects.create_user(email='student_pkg3@test.com', password='password', role=UserRole.STUDENT)
+        s3 = Student.objects.create(user=u3, enrollment_number='PKG3', branch='ECE', year=4, semester=8, cgpa=8.5)
+        a3 = Application.objects.create(student=s3, placement_drive=pd1)
+
+        # 10, 15, 20 LPA
+        Offer.objects.create(application=a1, student=s1, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=10.0, joining_location='Pune', joining_date=timezone.now().date(), offer_date=timezone.now().date())
+        Offer.objects.create(application=a2, student=s2, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=15.0, joining_location='Pune', joining_date=timezone.now().date(), offer_date=timezone.now().date())
+        Offer.objects.create(application=a3, student=s3, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=20.0, joining_location='Pune', joining_date=timezone.now().date(), offer_date=timezone.now().date())
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        data = response.data
+        self.assertEqual(data['total_offers'], 3)
+        self.assertEqual(data['average_package_lpa'], 15.0)
+        self.assertEqual(data['highest_package_lpa'], 20.0)
+        self.assertEqual(data['lowest_package_lpa'], 10.0)
+
+    def test_empty_offers_handled_safely(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        data = response.data
+        self.assertEqual(data['total_offers'], 0)
+        self.assertEqual(data['average_package_lpa'], 0.0)
+        self.assertEqual(data['highest_package_lpa'], 0.0)
+        self.assertEqual(data['lowest_package_lpa'], 0.0)
+
+class DriveStatisticsAPITestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('dashboard-drive-statistics')
+
+        self.admin_user = User.objects.create_user(email='admin_drv@test.com', password='password', role=UserRole.ADMIN, first_name='A', last_name='A')
+        self.po_user = User.objects.create_user(email='po_drv@test.com', password='password', role=UserRole.PLACEMENT_OFFICER, first_name='P', last_name='O')
+        self.student_user = User.objects.create_user(email='student_drv@test.com', password='password', role=UserRole.STUDENT, first_name='S', last_name='S')
+        self.recruiter_user = User.objects.create_user(email='recruiter_drv@test.com', password='password', role=UserRole.RECRUITER, first_name='R', last_name='R')
+
+    def test_permissions(self):
+        self.client.force_authenticate(user=self.admin_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.po_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.student_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.recruiter_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_drive_statistics_calculations(self):
+        s1 = Student.objects.create(user=self.student_user, enrollment_number='DRV1', branch='CSE', year=4, semester=8, cgpa=8.5)
+        c1 = Company.objects.create(company_name='Company A')
+        
+        pd1 = PlacementDrive.objects.create(company=c1, title='Drive 1', job_role='SDE', status='OPEN')
+        pd2 = PlacementDrive.objects.create(company=c1, title='Drive 2', job_role='SDE', status='CLOSED')
+        pd3 = PlacementDrive.objects.create(company=c1, title='Drive 3', job_role='SDE', status='COMPLETED')
+        pd4 = PlacementDrive.objects.create(company=c1, title='Drive 4', job_role='SDE', status='CANCELLED')
+
+        Application.objects.create(student=s1, placement_drive=pd1)
+        Application.objects.create(student=s1, placement_drive=pd2)
+        # Total apps = 2, total drives = 4. Avg = 0.5
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        data = response.data
+        self.assertEqual(data['total_drives'], 4)
+        self.assertEqual(data['open_drives'], 1)
+        self.assertEqual(data['closed_drives'], 1)
+        self.assertEqual(data['completed_drives'], 1)
+        self.assertEqual(data['cancelled_drives'], 1)
+        self.assertEqual(data['total_applications'], 2)
+        self.assertEqual(data['average_applications_per_drive'], 0.5)
+
+    def test_empty_drives_handled_safely(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        data = response.data
+        self.assertEqual(data['total_drives'], 0)
+        self.assertEqual(data['total_applications'], 0)
+        self.assertEqual(data['average_applications_per_drive'], 0.0)
