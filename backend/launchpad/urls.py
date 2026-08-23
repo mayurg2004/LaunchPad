@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/', include('notifications.urls')),
     path('api/', include('resumes.urls')),
     path('api/analytics/', include('analytics.urls')),
+    path('api/dashboard/', include('analytics.dashboard_urls')),
     path('api/ai/', include('ai.urls')),
 ]
 

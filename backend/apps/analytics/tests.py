@@ -274,3 +274,80 @@ class CompanyAnalyticsAPITestCase(TestCase):
         self.assertEqual(data[1]['selected_applications'], 0)
         self.assertEqual(data[1]['total_offers'], 0)
         self.assertEqual(data[1]['average_package_lpa'], 0.0)
+
+class DashboardSummaryAPITestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('dashboard-summary')
+
+        # Create users with different roles
+        self.admin_user = User.objects.create_user(email='admin_dash@test.com', password='password', role=UserRole.ADMIN, first_name='A', last_name='A')
+        self.po_user = User.objects.create_user(email='po_dash@test.com', password='password', role=UserRole.PLACEMENT_OFFICER, first_name='P', last_name='O')
+        self.student_user = User.objects.create_user(email='student_dash@test.com', password='password', role=UserRole.STUDENT, first_name='S', last_name='S')
+        self.recruiter_user = User.objects.create_user(email='recruiter_dash@test.com', password='password', role=UserRole.RECRUITER, first_name='R', last_name='R')
+
+    def test_permissions(self):
+        # Admin can access
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Placement Officer can access
+        self.client.force_authenticate(user=self.po_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Student is denied
+        self.client.force_authenticate(user=self.student_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Recruiter is denied
+        self.client.force_authenticate(user=self.recruiter_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_dashboard_calculations(self):
+        s1 = Student.objects.create(user=self.student_user, enrollment_number='D1', branch='CSE', year=4, semester=8, cgpa=8.5, is_placed=True)
+        u2 = User.objects.create_user(email='student2_dash@test.com', password='password', role=UserRole.STUDENT, first_name='S2', last_name='S2')
+        s2 = Student.objects.create(user=u2, enrollment_number='D2', branch='ECE', year=4, semester=8, cgpa=7.5, is_placed=False)
+
+        c1 = Company.objects.create(company_name='Company A Dash')
+        
+        pd1 = PlacementDrive.objects.create(company=c1, title='Drive 1', job_role='SDE', status='OPEN')
+        pd2 = PlacementDrive.objects.create(company=c1, title='Drive 2', job_role='QA', status='CLOSED')
+
+        a1 = Application.objects.create(student=s1, placement_drive=pd1, status='SELECTED')
+        a2 = Application.objects.create(student=s2, placement_drive=pd1, status='SHORTLISTED')
+        
+        Interview.objects.create(application=a1, round_name='R1', round_type='TECHNICAL', scheduled_at=timezone.now(), status='SCHEDULED')
+        Interview.objects.create(application=a2, round_name='R1', round_type='HR', scheduled_at=timezone.now(), status='COMPLETED')
+
+        Offer.objects.create(application=a1, student=s1, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=10, joining_location='Bangalore', joining_date=timezone.now().date(), offer_date=timezone.now().date(), status='ACCEPTED')
+        Offer.objects.create(application=a2, student=s2, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=10, joining_location='Bangalore', joining_date=timezone.now().date(), offer_date=timezone.now().date(), status='PENDING')
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        data = response.data
+        self.assertEqual(data['total_students'], 2)
+        self.assertEqual(data['total_companies'], 1)
+        self.assertEqual(data['active_placement_drives'], 1)
+        self.assertEqual(data['total_applications'], 2)
+        self.assertEqual(data['shortlisted_applications'], 1)
+        self.assertEqual(data['selected_applications'], 1)
+        self.assertEqual(data['scheduled_interviews'], 1)
+        self.assertEqual(data['total_offers'], 2)
+        self.assertEqual(data['accepted_offers'], 1)
+        self.assertEqual(data['placed_students'], 1)
+        self.assertEqual(data['placement_percentage'], 50.0)
+
+    def test_empty_database_does_not_cause_errors(self):
+        # Assumes DB is empty in a new test case except for created user
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertEqual(data['total_students'], 0)
+        self.assertEqual(data['placement_percentage'], 0.0)

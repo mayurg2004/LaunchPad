@@ -1,6 +1,15 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import permissions
+from rest_framework import permissions, status
+
+from accounts.models import UserRole
+from students.models import Student
+from companies.models import Company
+from placement_drive.models import PlacementDrive
+from applications.models import Application
+from interviews.models import Interview
+from offers.models import Offer
+from .services import DashboardService
 
 from accounts.models import UserRole
 from students.models import Student
@@ -17,6 +26,13 @@ class IsAdminOrPlacementOfficer(permissions.BasePermission):
             request.user.is_authenticated and 
             request.user.role in [UserRole.ADMIN, UserRole.PLACEMENT_OFFICER]
         )
+
+class DashboardSummaryView(APIView):
+    permission_classes = [IsAdminOrPlacementOfficer]
+
+    def get(self, request):
+        summary = DashboardService.get_summary()
+        return Response(summary, status=status.HTTP_200_OK)
 
 class AnalyticsOverviewView(APIView):
     permission_classes = [IsAdminOrPlacementOfficer]
