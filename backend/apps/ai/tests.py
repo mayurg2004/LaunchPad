@@ -274,6 +274,80 @@ class CareerRecommendationGenerationTests(APITestCase):
         response = self.client.post(self.generate_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+
+class CareerRecommendationRefreshTests(APITestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(email='refresh_student1@test.com', password='password123', first_name='Student', last_name='Refresh', role=UserRole.STUDENT)
+        self.student1 = Student.objects.create(user=self.user1, enrollment_number='REF1', branch='CS', year=3, semester=5, cgpa=8.0)
+        self.refresh_url = reverse('career-recommendation-refresh')
+
+    def _create_resume_with_skills(self, student, skills):
+        dummy_file = SimpleUploadedFile("resume.pdf", b"file_content", content_type="application/pdf")
+        resume = Resume.objects.create(student=student, title="Resume", file=dummy_file, is_active=True)
+        ResumeAnalysis.objects.create(resume=resume, score=80.0, skills_found=skills)
+        return resume
+
+    def test_refresh_generates_recommendations(self):
+        self._create_resume_with_skills(self.student1, ["Python", "Django"])
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.refresh_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(len(response.data) > 0)
+        self.assertEqual(CareerRecommendation.objects.filter(student=self.student1).count(), len(response.data))
+
+    def test_updated_resume_analysis_changes_recommendations(self):
+        # 1. Initial generation
+        self._create_resume_with_skills(self.student1, ["Python", "Django"])
+        self.client.force_authenticate(user=self.user1)
+        self.client.post(self.refresh_url)
+        
+        backend_count = CareerRecommendation.objects.filter(student=self.student1, recommended_role='Backend Developer').count()
+        frontend_count = CareerRecommendation.objects.filter(student=self.student1, recommended_role='Frontend Developer').count()
+        self.assertTrue(backend_count > 0)
+        self.assertEqual(frontend_count, 0)
+        
+        # 2. Upload new resume with different skills
+        self._create_resume_with_skills(self.student1, ["JavaScript", "React"])
+        
+        # 3. Refresh
+        response = self.client.post(self.refresh_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        new_backend_count = CareerRecommendation.objects.filter(student=self.student1, recommended_role='Backend Developer').count()
+        new_frontend_count = CareerRecommendation.objects.filter(student=self.student1, recommended_role='Frontend Developer').count()
+        
+        # Old recommendation should be deleted, new one created
+        self.assertEqual(new_backend_count, 0)
+        self.assertTrue(new_frontend_count > 0)
+
+    def test_duplicate_recommendations_are_not_created(self):
+        self._create_resume_with_skills(self.student1, ["Python", "Django"])
+        self.client.force_authenticate(user=self.user1)
+        self.client.post(self.refresh_url)
+        count_first = CareerRecommendation.objects.filter(student=self.student1).count()
+        
+        # Refresh again without changes
+        self.client.post(self.refresh_url)
+        count_second = CareerRecommendation.objects.filter(student=self.student1).count()
+        
+        self.assertEqual(count_first, count_second)
+        
+    def test_student_without_resume_is_handled(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.refresh_url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_student_without_analysis_is_handled(self):
+        dummy_file = SimpleUploadedFile("resume.pdf", b"file_content", content_type="application/pdf")
+        Resume.objects.create(student=self.student1, title="Resume", file=dummy_file, is_active=True)
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.post(self.refresh_url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+    def test_only_authenticated_users_can_refresh(self):
+        response = self.client.post(self.refresh_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
 from placement_drive.models import PlacementDrive
 from companies.models import Company
 

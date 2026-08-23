@@ -39,8 +39,7 @@ class CareerRecommendationViewSet(viewsets.ReadOnlyModelViewSet):
             return CareerRecommendation.objects.filter(student__user=user)
         return CareerRecommendation.objects.none()
 
-    @action(detail=False, methods=['post'])
-    def generate(self, request):
+    def _generate_and_save_recommendations(self, request, delete_outdated=False):
         user = request.user
         if user.role != UserRole.STUDENT:
             return Response({"error": "Only students can generate recommendations."}, status=status.HTTP_403_FORBIDDEN)
@@ -53,12 +52,17 @@ class CareerRecommendationViewSet(viewsets.ReadOnlyModelViewSet):
         if not active_resume:
             return Response({"error": "No active resume found."}, status=status.HTTP_400_BAD_REQUEST)
             
-        latest_analysis = ResumeAnalysis.objects.filter(resume=active_resume).first()
+        latest_analysis = ResumeAnalysis.objects.filter(resume=active_resume).order_by('-analyzed_at').first()
         if not latest_analysis:
             return Response({"error": "No resume analysis found. Please analyze your resume first."}, status=status.HTTP_400_BAD_REQUEST)
             
         detected_skills = latest_analysis.skills_found
         recommendations_data = generate_rule_based_recommendations(detected_skills)
+        
+        new_roles = [rec['role'] for rec in recommendations_data]
+        
+        if delete_outdated:
+            CareerRecommendation.objects.filter(student=student).exclude(recommended_role__in=new_roles).delete()
         
         created_recommendations = []
         for rec_data in recommendations_data:
@@ -74,5 +78,20 @@ class CareerRecommendationViewSet(viewsets.ReadOnlyModelViewSet):
             )
             created_recommendations.append(rec)
             
-        serializer = self.get_serializer(created_recommendations, many=True)
+        return created_recommendations
+
+    @action(detail=False, methods=['post'])
+    def generate(self, request):
+        result = self._generate_and_save_recommendations(request, delete_outdated=False)
+        if isinstance(result, Response):
+            return result
+        serializer = self.get_serializer(result, many=True)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def refresh(self, request):
+        result = self._generate_and_save_recommendations(request, delete_outdated=True)
+        if isinstance(result, Response):
+            return result
+        serializer = self.get_serializer(result, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
