@@ -34,6 +34,13 @@ class DashboardSummaryView(APIView):
         summary = DashboardService.get_summary()
         return Response(summary, status=status.HTTP_200_OK)
 
+class RecentActivityView(APIView):
+    permission_classes = [IsAdminOrPlacementOfficer]
+
+    def get(self, request):
+        activities = DashboardService.get_recent_activity(limit=50)
+        return Response({"activities": activities}, status=status.HTTP_200_OK)
+
 class AnalyticsOverviewView(APIView):
     permission_classes = [IsAdminOrPlacementOfficer]
 

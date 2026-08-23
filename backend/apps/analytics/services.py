@@ -37,3 +37,40 @@ class DashboardService:
             "placed_students": placed_students,
             "placement_percentage": placement_percentage
         }
+
+    @staticmethod
+    def get_recent_activity(limit=50):
+        activities = []
+        
+        apps = Application.objects.select_related('student__user', 'placement_drive__company').order_by('-applied_at')[:limit]
+        for app in apps:
+            activities.append({
+                "activity_type": "APPLICATION",
+                "description": f"Applied for {app.placement_drive.title}",
+                "related_company": app.placement_drive.company.company_name,
+                "student_name": f"{app.student.user.first_name} {app.student.user.last_name}".strip(),
+                "timestamp": app.applied_at
+            })
+            
+        interviews = Interview.objects.select_related('application__student__user', 'application__placement_drive__company').order_by('-created_at')[:limit]
+        for interview in interviews:
+            activities.append({
+                "activity_type": "INTERVIEW",
+                "description": f"Interview scheduled: {interview.round_name}",
+                "related_company": interview.application.placement_drive.company.company_name,
+                "student_name": f"{interview.application.student.user.first_name} {interview.application.student.user.last_name}".strip(),
+                "timestamp": interview.created_at
+            })
+            
+        offers = Offer.objects.select_related('student__user', 'company').order_by('-created_at')[:limit]
+        for offer in offers:
+            activities.append({
+                "activity_type": "OFFER",
+                "description": f"Offer extended: {offer.job_title} ({offer.package_lpa} LPA)",
+                "related_company": offer.company.company_name,
+                "student_name": f"{offer.student.user.first_name} {offer.student.user.last_name}".strip(),
+                "timestamp": offer.created_at
+            })
+            
+        activities.sort(key=lambda x: x["timestamp"], reverse=True)
+        return activities[:limit]

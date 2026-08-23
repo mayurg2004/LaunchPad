@@ -351,3 +351,66 @@ class DashboardSummaryAPITestCase(TestCase):
         data = response.data
         self.assertEqual(data['total_students'], 0)
         self.assertEqual(data['placement_percentage'], 0.0)
+
+class RecentActivityAPITestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('dashboard-recent-activity')
+
+        self.admin_user = User.objects.create_user(email='admin_act@test.com', password='password', role=UserRole.ADMIN, first_name='A', last_name='A')
+        self.po_user = User.objects.create_user(email='po_act@test.com', password='password', role=UserRole.PLACEMENT_OFFICER, first_name='P', last_name='O')
+        self.student_user = User.objects.create_user(email='student_act@test.com', password='password', role=UserRole.STUDENT, first_name='John', last_name='Doe')
+        self.recruiter_user = User.objects.create_user(email='recruiter_act@test.com', password='password', role=UserRole.RECRUITER, first_name='R', last_name='R')
+
+    def test_permissions(self):
+        self.client.force_authenticate(user=self.admin_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.po_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.student_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.recruiter_user)
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_recent_activities_appear_and_ordered(self):
+        s1 = Student.objects.create(user=self.student_user, enrollment_number='ACT1', branch='CSE', year=4, semester=8, cgpa=8.5)
+        c1 = Company.objects.create(company_name='Tech Corp')
+        pd1 = PlacementDrive.objects.create(company=c1, title='Software Engineer', job_role='SDE', status='OPEN')
+
+        # Create records slightly spaced out
+        a1 = Application.objects.create(student=s1, placement_drive=pd1, status='SELECTED')
+        Application.objects.filter(id=a1.id).update(applied_at=timezone.now() - timezone.timedelta(days=3))
+        
+        i1 = Interview.objects.create(application=a1, round_name='Technical Round', round_type='TECHNICAL', scheduled_at=timezone.now())
+        Interview.objects.filter(id=i1.id).update(created_at=timezone.now() - timezone.timedelta(days=2))
+
+        o1 = Offer.objects.create(application=a1, student=s1, company=c1, placement_drive=pd1, offer_type='FULL_TIME', job_title='SDE', package_lpa=12.0, joining_location='Pune', joining_date=timezone.now().date(), offer_date=timezone.now().date())
+        Offer.objects.filter(id=o1.id).update(created_at=timezone.now() - timezone.timedelta(days=1))
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        data = response.data['activities']
+        self.assertEqual(len(data), 3)
+
+        # Newest first (Offer -> Interview -> Application)
+        self.assertEqual(data[0]['activity_type'], 'OFFER')
+        self.assertIn('Offer extended', data[0]['description'])
+        self.assertEqual(data[0]['related_company'], 'Tech Corp')
+        self.assertEqual(data[0]['student_name'], 'John Doe')
+
+        self.assertEqual(data[1]['activity_type'], 'INTERVIEW')
+        self.assertIn('Technical Round', data[1]['description'])
+
+        self.assertEqual(data[2]['activity_type'], 'APPLICATION')
+        self.assertIn('Applied for Software Engineer', data[2]['description'])
+
+    def test_empty_database_works(self):
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['activities'], [])
