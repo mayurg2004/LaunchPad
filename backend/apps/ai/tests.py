@@ -273,3 +273,86 @@ class CareerRecommendationGenerationTests(APITestCase):
         
         response = self.client.post(self.generate_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+from placement_drive.models import PlacementDrive
+from companies.models import Company
+
+class RecommendedDrivesTests(APITestCase):
+    def setUp(self):
+        # Create student 1
+        self.user1 = User.objects.create_user(email='drive_student1@test.com', password='password123', first_name='Student', last_name='Drive', role=UserRole.STUDENT)
+        self.student1 = Student.objects.create(user=self.user1, enrollment_number='DRV1', branch='CS', year=3, semester=5, cgpa=8.0)
+        
+        # Create company
+        self.company = Company.objects.create(company_name='Test Company', website='https://test.com', description='Test')
+        
+        # Create drives
+        self.drive1 = PlacementDrive.objects.create(company=self.company, title='Backend Dev', job_role='Backend Developer', required_skills=["Python", "Django", "SQL"], status='OPEN')
+        self.drive2 = PlacementDrive.objects.create(company=self.company, title='Frontend Dev', job_role='Frontend Developer', required_skills=["React", "JavaScript", "HTML"], status='OPEN')
+        self.drive3 = PlacementDrive.objects.create(company=self.company, title='Data Scientist', job_role='Data Scientist', required_skills=["Python", "Machine Learning", "SQL", "Pandas"], status='OPEN')
+        self.drive_closed = PlacementDrive.objects.create(company=self.company, title='Closed Role', job_role='Closed Role', required_skills=["Python"], status='CLOSED')
+
+        self.url = reverse('recommended-drives')
+
+    def _create_resume_with_skills(self, student, skills):
+        dummy_file = SimpleUploadedFile("resume.pdf", b"file_content", content_type="application/pdf")
+        resume = Resume.objects.create(student=student, title="Resume", file=dummy_file, is_active=True)
+        ResumeAnalysis.objects.create(resume=resume, score=80.0, skills_found=skills)
+        return resume
+
+    def test_matching_drive_returned_and_unmatched_excluded(self):
+        self._create_resume_with_skills(self.student1, ["Python", "Django"])
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("data", response.data)
+        drives = response.data["data"]
+        
+        # Should return Backend Dev (2/3 match) and Data Scientist (1/4 match)
+        # Should NOT return Frontend Dev (0 match)
+        # Should NOT return Closed Role (because it's CLOSED)
+        self.assertEqual(len(drives), 2)
+        drive_titles = [d['job_role'] for d in drives]
+        self.assertIn('Backend Developer', drive_titles)
+        self.assertIn('Data Scientist', drive_titles)
+        self.assertNotIn('Frontend Developer', drive_titles)
+        self.assertNotIn('Closed Role', drive_titles)
+
+    def test_match_percentage_and_ordering(self):
+        self._create_resume_with_skills(self.student1, ["Python", "Django"])
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        drives = response.data["data"]
+        
+        # Backend Dev match: 2/3 = 66.67%
+        # Data Scientist match: 1/4 = 25.0%
+        # Ordering should be highest percentage first
+        self.assertEqual(drives[0]['job_role'], 'Backend Developer')
+        self.assertAlmostEqual(drives[0]['match_percentage'], 66.67, places=2)
+        
+        self.assertEqual(drives[1]['job_role'], 'Data Scientist')
+        self.assertAlmostEqual(drives[1]['match_percentage'], 25.0, places=1)
+
+    def test_student_without_resume(self):
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], "No active resume found.")
+
+    def test_student_without_analysis(self):
+        dummy_file = SimpleUploadedFile("resume.pdf", b"file_content", content_type="application/pdf")
+        Resume.objects.create(student=self.student1, title="Resume", file=dummy_file, is_active=True)
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], "No resume analysis found. Please analyze your resume first.")
+
+    def test_no_matching_drives(self):
+        self._create_resume_with_skills(self.student1, ["C++", "Java"])
+        self.client.force_authenticate(user=self.user1)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data['error'], "No matching drives found at this time.")
