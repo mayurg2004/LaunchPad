@@ -8,6 +8,8 @@ import 'package:launchpad/features/placement_drives/data/repositories/placement_
 
 // Mock Repository
 class MockPlacementDriveRepository extends PlacementDriveRepository {
+  int getDrivesCallCount = 0;
+
   @override
   Future<PaginatedDrives> getDrives({
     int page = 1,
@@ -16,6 +18,7 @@ class MockPlacementDriveRepository extends PlacementDriveRepository {
     String? companyId,
     String? minimumCgpa,
   }) async {
+    getDrivesCallCount++;
     return PaginatedDrives(
       count: 1,
       results: [
@@ -71,5 +74,34 @@ void main() {
     expect(find.text('Test Company'), findsOneWidget);
     expect(find.text('Software Engineer'), findsNWidgets(2));
     expect(find.text('10.0 LPA'), findsOneWidget);
+  });
+
+  testWidgets('Pull-to-refresh triggers getDrives reload', (WidgetTester tester) async {
+    final mockRepo = MockPlacementDriveRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          placementDriveRepositoryProvider.overrideWithValue(mockRepo),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: PlacementDrivesScreen(),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Initial load should trigger one call
+    expect(mockRepo.getDrivesCallCount, 1);
+
+    // Perform pull-to-refresh by dragging down the ListView
+    await tester.drag(find.byType(ListView), const Offset(0, 300));
+    await tester.pumpAndSettle();
+
+    // Verify getDrives was called again
+    expect(mockRepo.getDrivesCallCount, 2);
   });
 }
