@@ -8,6 +8,7 @@ import '../../notifications/presentation/notification_panel.dart';
 import '../../notifications/providers/notification_provider.dart';
 import 'dashboard_screen.dart';
 import '../../placement_drives/presentation/placement_drives_screen.dart';
+import '../../applications/presentation/applications_screen.dart';
 import '../../../core/api/api_client.dart';
 
 class DashboardLayout extends StatefulWidget {
@@ -59,6 +60,12 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         return const DashboardScreen();
       case 1:
         return const PlacementDrivesScreen();
+      case 2:
+        return ApplicationsScreen(
+          onBrowseOpportunities: () {
+            setState(() => _selectedIndex = 1);
+          },
+        );
       // Add other screens as needed
       default:
         return const Center(child: Text('Coming soon...'));
