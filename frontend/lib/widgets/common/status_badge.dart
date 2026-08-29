@@ -19,27 +19,45 @@ class StatusBadge extends StatelessWidget {
     Color backgroundColor;
     Color textColor;
 
-    switch (status) {
-      case BadgeStatus.success:
-        backgroundColor = AppColors.successBackground;
-        textColor = AppColors.success;
-        break;
-      case BadgeStatus.warning:
-        backgroundColor = AppColors.warningBackground;
-        textColor = AppColors.warning;
-        break;
-      case BadgeStatus.error:
-        backgroundColor = AppColors.errorBackground;
-        textColor = AppColors.error;
-        break;
-      case BadgeStatus.info:
-        backgroundColor = AppColors.infoBackground;
-        textColor = AppColors.info;
-        break;
-      case BadgeStatus.neutral:
-        backgroundColor = AppColors.surfaceElevated;
-        textColor = AppColors.textSecondary;
-        break;
+    final upperText = text.toUpperCase();
+    if (upperText == 'APPLIED') {
+      backgroundColor = AppColors.infoBackground;
+      textColor = AppColors.info;
+    } else if (upperText == 'SHORTLISTED') {
+      backgroundColor = AppColors.secondary.withValues(alpha: 0.15);
+      textColor = AppColors.secondary;
+    } else if (upperText == 'SELECTED') {
+      backgroundColor = AppColors.successBackground;
+      textColor = AppColors.success;
+    } else if (upperText == 'REJECTED') {
+      backgroundColor = AppColors.errorBackground;
+      textColor = AppColors.error;
+    } else if (upperText == 'WITHDRAWN') {
+      backgroundColor = AppColors.surfaceElevated;
+      textColor = AppColors.textSecondary;
+    } else {
+      switch (status) {
+        case BadgeStatus.success:
+          backgroundColor = AppColors.successBackground;
+          textColor = AppColors.success;
+          break;
+        case BadgeStatus.warning:
+          backgroundColor = AppColors.warningBackground;
+          textColor = AppColors.warning;
+          break;
+        case BadgeStatus.error:
+          backgroundColor = AppColors.errorBackground;
+          textColor = AppColors.error;
+          break;
+        case BadgeStatus.info:
+          backgroundColor = AppColors.infoBackground;
+          textColor = AppColors.info;
+          break;
+        case BadgeStatus.neutral:
+          backgroundColor = AppColors.surfaceElevated;
+          textColor = AppColors.textSecondary;
+          break;
+      }
     }
 
     return Container(
