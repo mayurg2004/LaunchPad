@@ -9,6 +9,7 @@ import '../../notifications/providers/notification_provider.dart';
 import 'dashboard_screen.dart';
 import '../../placement_drives/presentation/placement_drives_screen.dart';
 import '../../applications/presentation/applications_screen.dart';
+import '../../placement_drives/providers/application_provider.dart';
 import '../../../core/api/api_client.dart';
 
 class DashboardLayout extends StatefulWidget {
@@ -227,6 +228,35 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                   ),
                 ),
               ),
+              if (item.title == 'Applications')
+                Consumer(
+                  builder: (context, ref, child) {
+                    final applicationsAsync = ref.watch(myApplicationsProvider);
+                    return applicationsAsync.when(
+                      data: (applications) {
+                        if (applications.isEmpty) return const SizedBox.shrink();
+                        final count = applications.length;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            count > 99 ? '99+' : count.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, _) => const SizedBox.shrink(),
+                    );
+                  },
+                ),
             ],
           ),
         ),
