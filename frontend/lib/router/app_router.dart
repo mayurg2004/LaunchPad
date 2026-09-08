@@ -3,6 +3,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/dashboard/presentation/dashboard_layout.dart';
 import '../features/placement_drives/presentation/placement_drive_details_screen.dart';
 import '../core/api/api_client.dart';
+import '../features/interviews/presentation/interview_details_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/login',
@@ -34,6 +35,13 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final idStr = state.pathParameters['id']!;
         return PlacementDriveDetailsScreen(driveId: int.parse(idStr));
+      },
+    ),
+    GoRoute(
+      path: '/interviews/:id',
+      builder: (context, state) {
+        final idStr = state.pathParameters['id']!;
+        return InterviewDetailsScreen(interviewId: int.parse(idStr));
       },
     ),
   ],

@@ -7,6 +7,11 @@ import '../../../widgets/common/surface_card.dart';
 import '../../../widgets/common/status_badge.dart';
 import '../../../widgets/common/section_header.dart';
 import 'package:responsive_builder/responsive_builder.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../interviews/providers/interview_provider.dart';
+import '../../interviews/presentation/widgets/interview_status_badge.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -213,48 +218,95 @@ class DashboardScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Upcoming Interviews'),
+        SectionHeader(
+          title: 'Upcoming Interviews',
+          trailing: TextButton(
+            onPressed: () {
+              // The dashboard layout handles tab switching to index 3 for interviews
+              // But we can also just use GoRouter if we configured it. 
+              // For consistency with Applications, we should ideally use a callback, 
+              // but GoRouter is easier here since we didn't pass a callback for interviews.
+              // Let's assume the user will navigate via the sidebar.
+            },
+            child: const Text('View All'),
+          ),
+        ),
         const SizedBox(height: AppSpacing.lg),
         SurfaceCard(
           padding: EdgeInsets.zero,
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 3,
-            separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.border),
-            itemBuilder: (context, index) {
-              return ListTile(
-                contentPadding: const EdgeInsets.all(AppSpacing.md),
-                leading: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                  ),
-                  child: const Center(
-                    child: Icon(LucideIcons.calendar, color: AppColors.primary),
-                  ),
+          child: Consumer(
+            builder: (context, ref, child) {
+              final upcomingAsync = ref.watch(upcomingInterviewsProvider);
+              
+              return upcomingAsync.when(
+                data: (interviews) {
+                  if (interviews.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(AppSpacing.xl),
+                      child: Center(
+                        child: Text('No upcoming interviews', style: TextStyle(color: AppColors.textSecondary)),
+                      ),
+                    );
+                  }
+                  
+                  final displayInterviews = interviews.take(3).toList();
+                  
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: displayInterviews.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.border),
+                    itemBuilder: (context, index) {
+                      final interview = displayInterviews[index];
+                      final dateStr = DateFormat('MMM d, y').format(interview.scheduledAt);
+                      final timeStr = DateFormat('h:mm a').format(interview.scheduledAt);
+                      final isOnline = interview.meetingLink != null && interview.meetingLink!.isNotEmpty;
+                      
+                      return ListTile(
+                        onTap: () => context.push('/interviews/${interview.id}'),
+                        contentPadding: const EdgeInsets.all(AppSpacing.md),
+                        leading: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                          ),
+                          child: const Center(
+                            child: Icon(LucideIcons.calendar, color: AppColors.primary),
+                          ),
+                        ),
+                        title: Text(
+                          '${interview.roundName} - ${interview.companyName ?? 'Company'}',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xs),
+                          child: Row(
+                            children: [
+                              const Icon(LucideIcons.clock, size: 14, color: AppColors.textSecondary),
+                              const SizedBox(width: AppSpacing.xs),
+                              Text('$dateStr, $timeStr', style: Theme.of(context).textTheme.bodySmall),
+                              const SizedBox(width: AppSpacing.md),
+                              Icon(isOnline ? LucideIcons.video : LucideIcons.mapPin, size: 14, color: AppColors.textSecondary),
+                              const SizedBox(width: AppSpacing.xs),
+                              Text(isOnline ? 'Online' : 'In Person', style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                        trailing: InterviewStatusBadge(status: interview.status, result: interview.result),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(AppSpacing.xl),
+                  child: Center(child: CircularProgressIndicator()),
                 ),
-                title: Text(
-                  'Technical Round - TCS',
-                  style: Theme.of(context).textTheme.labelLarge,
+                error: (error, _) => Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Center(child: Text('Error loading interviews', style: TextStyle(color: AppColors.error))),
                 ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xs),
-                  child: Row(
-                    children: [
-                      const Icon(LucideIcons.clock, size: 14, color: AppColors.textSecondary),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text('Tomorrow, 10:00 AM', style: Theme.of(context).textTheme.bodySmall),
-                      const SizedBox(width: AppSpacing.md),
-                      const Icon(LucideIcons.video, size: 14, color: AppColors.textSecondary),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text('Online', style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                trailing: const StatusBadge(text: 'Scheduled', status: BadgeStatus.info),
               );
             },
           ),

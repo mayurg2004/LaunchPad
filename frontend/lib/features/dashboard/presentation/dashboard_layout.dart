@@ -11,6 +11,7 @@ import '../../placement_drives/presentation/placement_drives_screen.dart';
 import '../../applications/presentation/applications_screen.dart';
 import '../../placement_drives/providers/application_provider.dart';
 import '../../../core/api/api_client.dart';
+import '../../interviews/presentation/interviews_screen.dart';
 
 class DashboardLayout extends StatefulWidget {
   const DashboardLayout({super.key});
@@ -63,6 +64,12 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         return const PlacementDrivesScreen();
       case 2:
         return ApplicationsScreen(
+          onBrowseOpportunities: () {
+            setState(() => _selectedIndex = 1);
+          },
+        );
+      case 3:
+        return InterviewsScreen(
           onBrowseOpportunities: () {
             setState(() => _selectedIndex = 1);
           },
