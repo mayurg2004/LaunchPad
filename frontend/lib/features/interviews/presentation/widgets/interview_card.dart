@@ -27,6 +27,11 @@ class InterviewCard extends StatelessWidget {
     final isOnline = interview.meetingLink != null && interview.meetingLink!.isNotEmpty;
     final locationText = isOnline ? 'Online' : (interview.location?.isNotEmpty == true ? 'In Person' : 'TBD');
 
+    final now = DateTime.now();
+    final isToday = interview.scheduledAt.year == now.year &&
+        interview.scheduledAt.month == now.month &&
+        interview.scheduledAt.day == now.day;
+
     return SurfaceCard(
       onTap: onTap,
       child: Column(
@@ -81,10 +86,40 @@ class InterviewCard extends StatelessWidget {
             children: [
               Expanded(
                 flex: 3,
-                child: _buildInfoRow(
-                  context,
-                  LucideIcons.calendar,
-                  '$dateString \u00B7 $timeString',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.calendar, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      child: Text(
+                        '$dateString \u00B7 $timeString',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isToday) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'TODAY',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Expanded(
