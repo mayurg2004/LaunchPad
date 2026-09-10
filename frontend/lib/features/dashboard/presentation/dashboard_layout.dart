@@ -12,6 +12,7 @@ import '../../applications/presentation/applications_screen.dart';
 import '../../placement_drives/providers/application_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../interviews/presentation/interviews_screen.dart';
+import '../../profile/presentation/profile_screen.dart';
 
 class DashboardLayout extends StatefulWidget {
   const DashboardLayout({super.key});
@@ -25,6 +26,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
   final List<_NavigationItem> _navItems = [
     _NavigationItem(title: 'Dashboard', icon: LucideIcons.layoutDashboard),
+    _NavigationItem(title: 'Profile', icon: LucideIcons.user),
     _NavigationItem(title: 'Placement Drives', icon: LucideIcons.briefcase),
     _NavigationItem(title: 'Applications', icon: LucideIcons.fileText),
     _NavigationItem(title: 'Interviews', icon: LucideIcons.calendarDays),
@@ -61,17 +63,19 @@ class _DashboardLayoutState extends State<DashboardLayout> {
       case 0:
         return const DashboardScreen();
       case 1:
-        return const PlacementDrivesScreen();
+        return const ProfileScreen();
       case 2:
+        return const PlacementDrivesScreen();
+      case 3:
         return ApplicationsScreen(
           onBrowseOpportunities: () {
-            setState(() => _selectedIndex = 1);
+            setState(() => _selectedIndex = 2);
           },
         );
-      case 3:
+      case 4:
         return InterviewsScreen(
           onBrowseOpportunities: () {
-            setState(() => _selectedIndex = 1);
+            setState(() => _selectedIndex = 2);
           },
         );
       // Add other screens as needed
