@@ -13,6 +13,7 @@ import '../../placement_drives/providers/application_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../interviews/presentation/interviews_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
+import '../../resumes/presentation/resume_center_screen.dart';
 
 class DashboardLayout extends StatefulWidget {
   const DashboardLayout({super.key});
@@ -78,6 +79,8 @@ class _DashboardLayoutState extends State<DashboardLayout> {
             setState(() => _selectedIndex = 2);
           },
         );
+      case 6:
+        return const ResumeCenterScreen();
       // Add other screens as needed
       default:
         return const Center(child: Text('Coming soon...'));

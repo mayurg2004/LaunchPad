@@ -59,6 +59,13 @@ class ApiClient {
     return response;
   }
 
+  static Future<http.Response> delete(String endpoint) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    final response = await http.delete(url, headers: _headers);
+    await _handleResponse(response);
+    return response;
+  }
+
   static Future<http.Response> patch(String endpoint, {Map<String, dynamic>? body}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final response = await http.patch(
@@ -66,6 +73,41 @@ class ApiClient {
       headers: _headers,
       body: body != null ? jsonEncode(body) : null,
     );
+    await _handleResponse(response);
+    return response;
+  }
+
+  static Future<http.Response> multipartPost(
+    String endpoint, {
+    required String fileField,
+    required List<int> fileBytes,
+    required String filename,
+    Map<String, String>? fields,
+  }) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    final request = http.MultipartRequest('POST', url);
+    
+    // Add headers
+    request.headers.addAll({
+      if (_accessToken != null) 'Authorization': 'Token $_accessToken',
+    });
+
+    // Add fields
+    if (fields != null) {
+      request.fields.addAll(fields);
+    }
+
+    // Add file
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        fileField,
+        fileBytes,
+        filename: filename,
+      ),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
     await _handleResponse(response);
     return response;
   }
