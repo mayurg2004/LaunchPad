@@ -7,10 +7,12 @@ class ApiClient {
   
   static String? _accessToken;
   static String? _refreshToken;
+  static String? userRole;
 
-  static void setTokens(String access, String refresh) {
+  static void setTokens(String access, String refresh, {String? role}) {
     _accessToken = access;
     _refreshToken = refresh;
+    if (role != null) userRole = role;
   }
 
   static String? get accessToken => _accessToken;

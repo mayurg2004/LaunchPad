@@ -9,9 +9,32 @@ from placement_drive.models import PlacementDrive
 from applications.models import Application
 from interviews.models import Interview
 from offers.models import Offer
+from offers.models import Offer
 from .services import DashboardService
 
-from accounts.models import UserRole
+class StudentDashboardSummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role != UserRole.STUDENT:
+            return Response({"detail": "Only students can access this summary."}, status=status.HTTP_403_FORBIDDEN)
+            
+        try:
+            student = user.student_profile
+        except:
+            return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        applications_count = Application.objects.filter(student=student).count()
+        interviews_count = Interview.objects.filter(application__student=student, status='SCHEDULED').count()
+        offers_count = Offer.objects.filter(student=student).count()
+        
+        return Response({
+            "applications_count": applications_count,
+            "interviews_count": interviews_count,
+            "offers_count": offers_count,
+            "is_placed": student.is_placed
+        }, status=status.HTTP_200_OK)
 from students.models import Student
 from companies.models import Company
 from placement_drive.models import PlacementDrive

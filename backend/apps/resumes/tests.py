@@ -4,9 +4,11 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from accounts.models import User, UserRole
 from students.models import Student
-from resumes.models import Resume
+from resumes.models import Resume, ResumeAnalysis
+import apps.resumes.utils
 
 class ResumeAPITests(APITestCase):
     def setUp(self):

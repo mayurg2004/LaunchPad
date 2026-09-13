@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.conf import settings
-from .services import AIService
-from .providers.mock import MockAIProvider
+from ai.services import AIService
+from ai.providers.mock import MockAIProvider
 
 class AIServiceTests(TestCase):
     def test_ai_service_instantiation(self):
@@ -60,7 +60,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from accounts.models import User, UserRole
 from students.models import Student
-from .models import CareerRecommendation
+from ai.models import CareerRecommendation
 from django.core.exceptions import ValidationError
 
 class CareerRecommendationTests(APITestCase):

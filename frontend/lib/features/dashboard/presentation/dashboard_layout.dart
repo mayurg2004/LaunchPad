@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../notifications/presentation/notification_panel.dart';
 import '../../notifications/providers/notification_provider.dart';
 import 'dashboard_screen.dart';
+import 'po_dashboard_screen.dart';
+import 'po_students_screen.dart';
+import 'po_companies_screen.dart';
 import '../../placement_drives/presentation/placement_drives_screen.dart';
 import '../../applications/presentation/applications_screen.dart';
 import '../../placement_drives/providers/application_provider.dart';
@@ -25,16 +28,30 @@ class DashboardLayout extends StatefulWidget {
 class _DashboardLayoutState extends State<DashboardLayout> {
   int _selectedIndex = 0;
 
-  final List<_NavigationItem> _navItems = [
-    _NavigationItem(title: 'Dashboard', icon: LucideIcons.layoutDashboard),
-    _NavigationItem(title: 'Profile', icon: LucideIcons.user),
-    _NavigationItem(title: 'Placement Drives', icon: LucideIcons.briefcase),
-    _NavigationItem(title: 'Applications', icon: LucideIcons.fileText),
-    _NavigationItem(title: 'Interviews', icon: LucideIcons.calendarDays),
-    _NavigationItem(title: 'Offers', icon: LucideIcons.award),
-    _NavigationItem(title: 'Resume', icon: LucideIcons.fileBadge2),
-    _NavigationItem(title: 'AI Career', icon: LucideIcons.sparkles),
-  ];
+  late final List<_NavigationItem> _navItems;
+  final bool _isOfficer = ApiClient.userRole == 'PLACEMENT_OFFICER';
+
+  @override
+  void initState() {
+    super.initState();
+    _navItems = _isOfficer ? [
+      _NavigationItem(title: 'Dashboard', icon: LucideIcons.layoutDashboard),
+      _NavigationItem(title: 'Placement Drives', icon: LucideIcons.briefcase),
+      _NavigationItem(title: 'Students', icon: LucideIcons.users),
+      _NavigationItem(title: 'Companies', icon: LucideIcons.building2),
+      _NavigationItem(title: 'Interviews', icon: LucideIcons.calendarDays),
+      _NavigationItem(title: 'Offers', icon: LucideIcons.award),
+    ] : [
+      _NavigationItem(title: 'Dashboard', icon: LucideIcons.layoutDashboard),
+      _NavigationItem(title: 'Profile', icon: LucideIcons.user),
+      _NavigationItem(title: 'Placement Drives', icon: LucideIcons.briefcase),
+      _NavigationItem(title: 'Applications', icon: LucideIcons.fileText),
+      _NavigationItem(title: 'Interviews', icon: LucideIcons.calendarDays),
+      _NavigationItem(title: 'Offers', icon: LucideIcons.award),
+      _NavigationItem(title: 'Resume', icon: LucideIcons.fileBadge2),
+      _NavigationItem(title: 'AI Career', icon: LucideIcons.sparkles),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +77,22 @@ class _DashboardLayoutState extends State<DashboardLayout> {
   }
 
   Widget _buildCurrentScreen() {
+    if (_isOfficer) {
+      switch (_selectedIndex) {
+        case 0:
+          return const PODashboardScreen();
+        case 1:
+          return const PlacementDrivesScreen();
+        case 2:
+          return const POStudentsScreen();
+        case 3:
+          return const POCompaniesScreen();
+        // Add other PO screens here
+        default:
+          return const Center(child: Text('Coming soon...'));
+      }
+    }
+
     switch (_selectedIndex) {
       case 0:
         return const DashboardScreen();

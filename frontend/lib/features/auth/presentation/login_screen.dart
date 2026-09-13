@@ -6,6 +6,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../widgets/common/primary_button.dart';
 import '../../../widgets/common/custom_text_field.dart';
 import '../../../core/api/api_client.dart';
+import 'dart:convert';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -19,13 +20,42 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   void _handleLogin() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
-    // Simulate network request
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
+    
+    try {
+      final response = await ApiClient.post('/accounts/login/', body: {
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text,
+      });
+
+      if (!mounted) return;
+
       setState(() => _isLoading = false);
-      ApiClient.setTokens('mock_access_token', 'mock_refresh_token');
-      context.go('/dashboard');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final role = data['user']?['role'];
+        ApiClient.setTokens(data['access'], data['refresh'], role: role);
+        
+        context.go('/dashboard');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid credentials'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Network error. Please try again.'), backgroundColor: Colors.red),
+      );
     }
   }
 
